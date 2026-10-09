@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f1ff">
+  <title>Cricut Color Studio v1.0.0</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Cricut Color Studio home"><span class="brand-mark">✂</span><span>Cricut <strong>Color Studio</strong></span></a>
+    <span class="version">V1.0.0 · Runs in your browser</span>
+  </header>
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow">MAKE SOMETHING COLORFUL</div>
+      <h1>Your picture.<br><span>Your colors. Your creation.</span></h1>
+      <p>Turn an illustration into color-separated SVG layers for Cricut Design Space. No account, no AI API, and your image stays on this device.</p>
+    </section>
+
+    <section class="panel upload-panel" id="uploadPanel">
+      <div class="upload-icon">↑</div>
+      <h2>Let’s make something!</h2>
+      <p>Choose an illustration or photo to get started.</p>
+      <label class="primary-btn file-btn">Choose an image<input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <p class="fineprint">PNG, JPG, or WebP · Recommended: clear illustrations with defined colors</p>
+      <div id="dropHint" class="drop-hint">You can also drag and drop an image here.</div>
+    </section>
+
+    <section id="workspace" class="workspace hidden">
+      <div class="step-heading">
+        <div><span class="step-number">1</span><div><h2>Choose your colors</h2><p>Fewer colors usually means an easier project to make.</p></div></div>
+        <button class="text-btn" id="startOverBtn" type="button">Start over</button>
+      </div>
+      <div class="controls panel">
+        <div class="control-group">
+          <label for="colorCount">Color detail</label>
+          <div class="segmented" role="group" aria-label="Number of colors">
+            <button type="button" data-colors="4">Simple <small>4 colors</small></button>
+            <button type="button" data-colors="8" class="selected">Balanced <small>8 colors</small></button>
+            <button type="button" data-colors="12">Detailed <small>12 colors</small></button>
+          </div>
+        </div>
+        <div class="control-group">
+          <label for="material">What are you making?</label>
+          <select id="material">
+            <option value="vinyl">Adhesive vinyl</option>
+            <option value="paper">Cardstock / paper</option>
+            <option value="htv">Iron-on / heat-transfer vinyl (HTV)</option>
+          </select>
+          <p class="field-help" id="materialHelp">Use separate vinyl colors for each layer.</p>
+        </div>
+        <div class="control-group">
+          <label for="designWidth">Finished width</label>
+          <div class="input-unit"><input id="designWidth" type="number" min="2" max="24" step="0.5" value="6"><span>inches</span></div>
+          <p class="field-help">Height scales to keep the image's proportions.</p>
+        </div>
+        <button id="processBtn" class="primary-btn full-btn" type="button">Make my color layers</button>
+      </div>
+
+      <div id="results" class="hidden">
+        <div class="step-heading">
+          <div><span class="step-number">2</span><div><h2>Preview your design</h2><p>Tap a color layer to inspect it.</p></div></div>
+          <span id="statusPill" class="status-pill">Ready to preview</span>
+        </div>
+        <div class="preview-grid">
+          <article class="panel preview-card">
+            <div class="card-title"><h3>Your design</h3><span id="dimensions"></span></div>
+            <div class="artboard" id="compositePreview"><div class="empty-preview">Your preview will appear here.</div></div>
+            <div class="legend" id="legend"></div>
+          </article>
+          <article class="panel layers-card">
+            <div class="card-title"><h3>Color layers</h3><span id="layerCount">0 layers</span></div>
+            <div id="layerList" class="layer-list"></div>
+          </article>
+        </div>
+
+        <details class="panel advanced" id="advancedPanel">
+          <summary><span><strong>Advanced options</strong><small>For when you want more control</small></span><span class="chevron">⌄</span></summary>
+          <div class="advanced-body">
+            <div class="advanced-grid">
+              <div>
+                <label for="minRegion">Remove tiny pieces</label>
+                <select id="minRegion">
+                  <option value="0">Keep all pieces</option>
+                  <option value="4" selected>Light cleanup</option>
+                  <option value="12">Medium cleanup</option>
+                  <option value="30">Strong cleanup</option>
+                </select>
+                <p class="field-help">Small disconnected areas under this pixel-area threshold are omitted.</p>
+              </div>
+              <div>
+                <label for="outlineMode">Dark outline handling</label>
+                <select id="outlineMode">
+                  <option value="cut" selected>Keep as a cut layer</option>
+                  <option value="draw">Prepare as a draw layer (experimental)</option>
+                </select>
+                <p class="field-help">Draw mode uses traced outline-region boundaries, not true centerlines. Inspect it carefully in Design Space.</p>
+              </div>
+            </div>
+            <div class="advanced-actions">
+              <button id="rebuildBtn" class="secondary-btn" type="button">Apply advanced settings</button>
+              <button id="mergeBtn" class="secondary-btn" type="button">Merge similar colors</button>
+            </div>
+            <p class="field-help" id="advancedNote">Cleanup and color merging regenerate the layers from the uploaded image.</p>
+          </div>
+        </details>
+
+        <div class="step-heading export-heading">
+          <div><span class="step-number">3</span><div><h2>Take it to Cricut</h2><p>Download your design files and follow the quick guide.</p></div></div>
+        </div>
+        <div class="panel export-panel">
+          <div class="export-row">
+            <div class="export-icon">SVG</div><div class="export-copy"><h3>Combined SVG</h3><p>All color layers in one file, kept in their original positions.</p></div><button id="downloadCombined" class="primary-btn" type="button" disabled>Download SVG</button>
+          </div>
+          <div class="export-row">
+            <div class="export-icon">ZIP</div><div class="export-copy"><h3>Color-by-color package</h3><p>One SVG per color, plus a material checklist and Cricut instructions.</p></div><button id="downloadZip" class="secondary-btn" type="button" disabled>Download ZIP</button>
+          </div>
+          <div id="exportWarnings" class="warnings"></div>
+        </div>
+      </div>
+    </section>
+    <section class="privacy-note"><span>🔒</span><p><strong>Your picture stays on your device.</strong> Image processing happens in this browser. Nothing is uploaded to a server.</p></section>
+    <footer>Made for curious makers · Cricut Color Studio v1.0.0 <span>Not affiliated with Cricut.</span></footer>
+  </main>
+  <canvas id="workCanvas" hidden></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
