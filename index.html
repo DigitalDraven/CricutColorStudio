@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f1ff">
-  <title>Cricut Color Studio v1.0.0</title>
+  <title>Cricut Color Studio v1.0.1</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="./" aria-label="Cricut Color Studio home"><span class="brand-mark">✂</span><span>Cricut <strong>Color Studio</strong></span></a>
-    <span class="version">V1.0.0 · Runs in your browser</span>
+    <span class="version">V1.0.1 · Runs in your browser</span>
   </header>
   <main class="shell">
     <section class="hero">
@@ -50,6 +50,10 @@
             <option value="htv">Iron-on / heat-transfer vinyl (HTV)</option>
           </select>
           <p class="field-help" id="materialHelp">Use separate vinyl colors for each layer.</p>
+        </div>
+        <div class="control-group background-control">
+          <label class="checkbox-label"><input id="removeBackground" type="checkbox" checked> Remove white background</label>
+          <p class="field-help">Removes near-white areas connected to the image edges. Enclosed white details are kept.</p>
         </div>
         <div class="control-group">
           <label for="designWidth">Finished width</label>
@@ -122,7 +126,7 @@
       </div>
     </section>
     <section class="privacy-note"><span>🔒</span><p><strong>Your picture stays on your device.</strong> Image processing happens in this browser. Nothing is uploaded to a server.</p></section>
-    <footer>Made for curious makers · Cricut Color Studio v1.0.0 <span>Not affiliated with Cricut.</span></footer>
+    <footer>Made for curious makers · Cricut Color Studio v1.0.1 <span>Not affiliated with Cricut.</span></footer>
   </main>
   <canvas id="workCanvas" hidden></canvas>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>

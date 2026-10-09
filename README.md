@@ -1,6 +1,6 @@
 # Cricut Color Studio
 
-**Version:** 1.0.0  
+**Version:** 1.0.1  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
 **Hosting:** GitHub Pages (static site)  
 **Processing:** Browser-only; no image uploads, accounts, AI APIs, or application backend.
@@ -9,6 +9,7 @@
 
 - Responsive desktop and mobile layout.
 - PNG, JPG, and WebP image upload.
+- Optional edge-connected white/near-white background removal that preserves enclosed white details.
 - 4-, 8-, and 12-color simplification presets.
 - Connected color-region detection and vector path generation.
 - Individual layer preview and combined design preview.
@@ -33,7 +34,7 @@ The ZIP export uses JSZip from jsDelivr CDN. The core image processing and combi
 
 ## How the vectorizer works
 
-The app scales the image to a maximum dimension of 700 pixels, composites transparency onto white, reduces colors with a browser-side k-means palette, detects 4-connected regions, filters tiny components, and traces pixel boundaries into closed SVG paths. Paths are simplified by removing collinear points.
+The app scales the image to a maximum dimension of 700 pixels, optionally makes edge-connected near-white background pixels transparent, reduces only visible pixels to a color palette with a browser-side k-means palette, detects 4-connected regions, filters tiny components, and traces pixel boundaries into closed SVG paths. Paths are simplified by removing collinear points.
 
 This is an initial, deterministic V1 converter—not a professional illustration reconstruction tool. Shaded or photographic images may create many irregular patches. For best results, start with clear illustrations, cartoons, logos, and flat-color artwork.
 
@@ -51,7 +52,7 @@ Image processing occurs locally in the browser. The app does not send images to 
 
 ## Versioning
 
-- Application version: `1.0.0`
+- Application version: `1.0.1`
 - SVG export metadata and project guide identify the app version.
 - Future releases should update the app version in `index.html`, `js/app.js` comments, and this README.
 

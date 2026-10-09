@@ -1,8 +1,8 @@
-/* Cricut Color Studio v1.0.0 — browser-only image processing */
+/* Cricut Color Studio v1.0.1 — browser-only image processing */
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { image: null, fileName: "my-design", count: 8, layers: [], selected: -1, width: 6, merge: false };
+  const state = { image: null, originalImage: null, fileName: "my-design", count: 8, layers: [], selected: -1, width: 6, merge: false, backgroundRemoved: true };
   const canvas = $("workCanvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
   const fileInput = $("fileInput");
   const paletteButtons = [...document.querySelectorAll("[data-colors]")];
@@ -30,8 +30,10 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        state.image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        state.originalImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        state.image = new ImageData(new Uint8ClampedArray(state.originalImage.data), state.originalImage.width, state.originalImage.height);
         state.fileName = safeName(file.name);
+        applyBackgroundSetting();
         $("uploadPanel").classList.add("hidden");
         $("workspace").classList.remove("hidden");
         $("results").classList.add("hidden");
@@ -63,8 +65,38 @@
     processImage();
   });
   $("material").addEventListener("change", updateMaterialHelp);
+  $("removeBackground").addEventListener("change", () => { applyBackgroundSetting(); if (state.image) processImage(); });
   $("downloadCombined").addEventListener("click", downloadCombined);
   $("downloadZip").addEventListener("click", downloadZip);
+
+  function applyBackgroundSetting() {
+    if (!state.originalImage) return;
+    const src = state.originalImage;
+    const out = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+    state.backgroundRemoved = $("removeBackground").checked;
+    if (state.backgroundRemoved) {
+      const w = src.width, h = src.height, data = out.data, n = w * h;
+      const seen = new Uint8Array(n), queue = new Int32Array(n);
+      let head = 0, tail = 0;
+      const isBackgroundPixel = p => {
+        const i = p * 4, r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+        return a > 0 && r >= 242 && g >= 242 && b >= 242 &&
+          Math.max(r,g,b) - Math.min(r,g,b) <= 18;
+      };
+      const add = p => { if (!seen[p] && isBackgroundPixel(p)) { seen[p] = 1; queue[tail++] = p; } };
+      for (let x=0; x<w; x++) { add(x); add((h-1)*w+x); }
+      for (let y=0; y<h; y++) { add(y*w); add(y*w+w-1); }
+      while (head < tail) {
+        const p = queue[head++], x = p % w, y = (p / w) | 0;
+        if (x > 0) add(p-1);
+        if (x < w-1) add(p+1);
+        if (y > 0) add(p-w);
+        if (y < h-1) add(p+w);
+      }
+      for (let p=0; p<n; p++) if (seen[p]) data[p*4+3] = 0;
+    }
+    state.image = out;
+  }
 
   function updateMaterialHelp() {
     const m = $("material").value;
@@ -76,28 +108,27 @@
   }
   function colorDist(a,b) { return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2; }
   function quantize(data, requested) {
-    const n = data.length / 4, samples = [];
-    // Sampling caps k-means cost while keeping spatially diverse pixels.
-    const stride = Math.max(1, Math.floor(n / 12000));
-    for (let i=0;i<n;i+=stride) {
-      const p=i*4, a=data[p+3]/255;
-      samples.push([Math.round(data[p]*a+255*(1-a)), Math.round(data[p+1]*a+255*(1-a)), Math.round(data[p+2]*a+255*(1-a))]);
+    const n = data.length / 4, samples = [], opaque = [];
+    for (let i=0;i<n;i++) if (data[i*4+3] !== 0) opaque.push(i);
+    if (!opaque.length) throw new Error("The image appears to be fully transparent. Turn off background removal or try another image.");
+    const stride = Math.max(1, Math.floor(opaque.length / 12000));
+    for (let j=0;j<opaque.length;j+=stride) {
+      const p=opaque[j]*4; samples.push([data[p],data[p+1],data[p+2]]);
     }
-    const k = Math.max(2, Math.min(requested, 12, new Set(samples.map(c=>c.join(","))).size));
+    const uniqueCount = new Set(samples.map(c=>c.join(","))).size;
+    const k = Math.max(1, Math.min(requested, 12, uniqueCount));
     const centers = [];
-    // Seed centroids from evenly spaced samples sorted by luminance.
     samples.sort((a,b)=>(a[0]*.299+a[1]*.587+a[2]*.114)-(b[0]*.299+b[1]*.587+b[2]*.114));
     for(let j=0;j<k;j++) centers.push([...samples[Math.min(samples.length-1,Math.floor((j+.5)*samples.length/k))]]);
-    for(let iter=0;iter<6;iter++){
+    for(let iter=0;iter<7;iter++){
       const sums=Array.from({length:k},()=>[0,0,0,0]);
       for(const c of samples){let best=0,bd=Infinity;for(let j=0;j<k;j++){const d=colorDist(c,centers[j]);if(d<bd){bd=d;best=j;}}const s=sums[best];s[0]+=c[0];s[1]+=c[1];s[2]+=c[2];s[3]++;}
       for(let j=0;j<k;j++)if(sums[j][3])centers[j]=sums[j].slice(0,3).map(v=>Math.round(v/sums[j][3]));
     }
-    const pixels=new Uint8Array(n);
-    for(let i=0;i<n;i++){const p=i*4,c=[data[p],data[p+1],data[p+2]];let best=0,bd=Infinity;for(let j=0;j<k;j++){const d=colorDist(c,centers[j]);if(d<bd){bd=d;best=j;}}pixels[i]=best;}
-    // Remove unused centroids and remap indices.
-    const used=[...new Set(pixels)].sort((a,b)=>a-b), remap=new Map(used.map((v,i)=>[v,i]));
-    for(let i=0;i<n;i++)pixels[i]=remap.get(pixels[i]);
+    const pixels=new Uint8Array(n); pixels.fill(255); // 255 is reserved for transparent pixels
+    for(const i of opaque){const p=i*4,c=[data[p],data[p+1],data[p+2]];let best=0,bd=Infinity;for(let j=0;j<k;j++){const d=colorDist(c,centers[j]);if(d<bd){bd=d;best=j;}}pixels[i]=best;}
+    const used=[...new Set(opaque.map(i=>pixels[i]))].sort((a,b)=>a-b), remap=new Map(used.map((v,i)=>[v,i]));
+    for(const i of opaque)pixels[i]=remap.get(pixels[i]);
     return {pixels, colors:used.map(i=>centers[i])};
   }
   function findComponents(pixels, w, h, colorCount) {
@@ -105,6 +136,7 @@
     const queue = new Int32Array(pixels.length);
     for(let start=0;start<pixels.length;start++){
       if(seen[start])continue;
+      if(pixels[start]===255){seen[start]=1;continue;}
       const color=pixels[start];let head=0,tail=0;queue[tail++]=start;seen[start]=1;const ids=[];
       while(head<tail){const p=queue[head++];ids.push(p);const x=p%w,y=(p/w)|0;
         if(x>0){const q=p-1;if(!seen[q]&&pixels[q]===color){seen[q]=1;queue[tail++]=q;}}
@@ -251,7 +283,7 @@
     });
     const m=$("material").value;
     const materialName=m==="htv"?"Iron-on / heat-transfer vinyl (HTV)":m==="paper"?"Cardstock / paper":"Adhesive vinyl";
-    const guide=`CRICUT COLOR STUDIO — V1.0.0
+    const guide=`CRICUT COLOR STUDIO — V1.0.1
 Project: ${state.fileName}
 Finished width: ${state.width} inches
 Material selected: ${materialName}
