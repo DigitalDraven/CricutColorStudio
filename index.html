@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f1ff">
-  <title>Cricut Color Studio v1.0.7.2</title>
-  <link rel="stylesheet" href="css/styles.css?v=1.0.7.2">
+  <title>Cricut Color Studio v1.1.0</title>
+  <link rel="stylesheet" href="css/styles.css?v=1.1.0">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="./" aria-label="Cricut Color Studio home"><span class="brand-mark">✂</span><span>Cricut <strong>Color Studio</strong></span></a>
-    <span class="version">V1.0.7.2 · Runs in your browser</span>
+    <span class="version">V1.1.0 · Runs in your browser</span>
   </header>
   <main class="shell">
     <section class="hero">
       <div class="eyebrow">MAKE SOMETHING COLORFUL</div>
       <h1>Your picture.<br><span>Your colors. Your creation.</span></h1>
-      <p>Turn an illustration into color-separated SVG layers for Cricut Design Space. No account, no AI API, and your image stays on this device.</p>
+      <p>Turn a picture into colorful layers you can cut with your Cricut. No account needed, and your picture never leaves this device.</p>
     </section>
 
     <section class="panel upload-panel" id="uploadPanel">
@@ -35,58 +35,60 @@
       </div>
       <div class="controls panel">
         <div class="control-group">
-          <label for="colorCount">Color detail</label>
+          <label for="colorCount">How many colors?</label>
           <div class="segmented" role="group" aria-label="Number of colors">
             <button type="button" data-colors="4" class="selected">Simple <small>4 colors</small></button>
             <button type="button" data-colors="8">Balanced <small>8 colors</small></button>
             <button type="button" data-colors="12">Detailed <small>12 colors</small></button>
           </div>
-          <p class="field-help flat-mode-note">Flat Color mode is on: similar shades are grouped and small pixel variations are smoothed.</p>
+          <p class="field-help flat-mode-note">Fewer colors means fewer pieces to cut and stick. Start with Simple!</p>
         </div>
         <div class="control-group">
-          <label for="material">What are you making?</label>
+          <label for="material">What will you cut?</label>
           <select id="material">
-            <option value="vinyl">Adhesive vinyl</option>
-            <option value="paper">Cardstock / paper</option>
-            <option value="htv">Iron-on / heat-transfer vinyl (HTV)</option>
+            <option value="vinyl">Sticky vinyl (stickers, decals)</option>
+            <option value="paper">Paper or cardstock</option>
+            <option value="htv">Iron-on vinyl (shirts and bags)</option>
           </select>
-          <p class="field-help" id="materialHelp">Use separate vinyl colors for each layer.</p>
+          <p class="field-help" id="materialHelp">Use a different color of sticky vinyl for each layer.</p>
         </div>
         <div class="control-group background-control">
           <label class="checkbox-label"><input id="removeBackground" type="checkbox" checked> Remove white background</label>
-          <p class="field-help">Removes near-white areas connected to the image edges. Enclosed white details are kept.</p>
+          <p class="field-help">Takes away the white around your picture so only the drawing gets cut. White parts inside the picture stay.</p>
           <p class="field-help" id="backgroundStatus" aria-live="polite">Background removal is ready.</p>
         </div>
         <div class="control-group">
-          <label for="cleanupPreset">Cut detail</label>
+          <label for="cleanupPreset">How easy to cut?</label>
           <select id="cleanupPreset">
-            <option value="fine">Fine detail</option>
-            <option value="balanced" selected>Balanced</option>
-            <option value="easy">Easy cut</option>
+            <option value="fine">Lots of detail (tiny pieces)</option>
+            <option value="balanced">Balanced</option>
+            <option value="easy" selected>Easy cut (bigger pieces)</option>
           </select>
-          <p class="field-help">Cleanup adjusts to the finished design size.</p>
+          <p class="field-help">Easy cut makes bigger, simpler pieces that are easier to peel and stick.</p>
         </div>
         <div class="control-group">
-          <label for="designWidth">Finished width</label>
+          <label for="designWidth">How wide will it be?</label>
           <div class="input-unit"><input id="designWidth" type="number" min="2" max="24" step="0.5" value="6"><span>inches</span></div>
-          <p class="field-help">Height scales to keep the image's proportions.</p>
+          <p class="field-help">The height changes to match your picture.</p>
         </div>
         <button id="processBtn" class="primary-btn full-btn" type="button">Make my color layers</button>
       </div>
 
       <div id="results" class="hidden">
         <div class="step-heading">
-          <div><span class="step-number">2</span><div><h2>Preview your design</h2><p>Tap a color layer to inspect it.</p></div></div>
+          <div><span class="step-number">2</span><div><h2>Check your design</h2><p>Tap a color to look at just that layer. Use the checkboxes to turn colors off.</p></div></div>
           <span id="statusPill" class="status-pill">Ready to preview</span>
         </div>
+        <div id="friendlyNote" class="friendly-note hidden" role="status" aria-live="polite"></div>
         <div class="preview-grid">
           <article class="panel preview-card">
             <div class="card-title"><h3>Your design</h3><span id="dimensions"></span></div>
             <div class="artboard" id="compositePreview"><div class="empty-preview">Your preview will appear here.</div></div>
             <div class="legend" id="legend"></div>
+            <label class="tiny-toggle"><input id="showTinyPieces" type="checkbox"> Show tiny pieces in red <span id="tinyCount"></span></label>
           </article>
           <article class="panel layers-card">
-            <div class="card-title"><h3>Color layers</h3><span id="layerCount">0 layers</span></div>
+            <div class="card-title"><h3>Your colors</h3><span id="layerCount">0 layers</span></div>
             <div class="layer-actions"><button id="showAllLayers" class="text-btn" type="button">Show all</button><button id="hideAllLayers" class="text-btn" type="button">Hide all</button></div>
             <div id="layerList" class="layer-list"></div>
           </article>
@@ -95,6 +97,12 @@
         <details class="panel advanced" id="advancedPanel">
           <summary><span><strong>Advanced options</strong><small>For when you want more control</small></span><span class="chevron">⌄</span></summary>
           <div class="advanced-body">
+            <section class="ai-prompt-tools">
+              <h3>AI simplification prompt</h3>
+              <p class="field-help">For complicated artwork, copy this prompt into your preferred image-editing AI. Upload the simplified PNG back into Color Studio; this app still creates the SVG layers.</p>
+              <button id="copyAiPromptBtn" class="secondary-btn" type="button">Copy AI simplification prompt</button>
+              <textarea id="aiPromptText" class="ai-prompt-text" aria-label="AI simplification prompt" hidden readonly rows="10">Edit the attached image directly to prepare it for layered vinyl cutting or screen printing. Preserve the original subject, pose, composition, proportions, and recognizable details. Do not redesign the subject or add new elements. Remove the background and return a transparent background. Reduce the image to approximately 4–6 solid colors, flatten highlights and shadows into broader color regions, remove gradients, texture, noise, cross-hatching, stippling, and unnecessary sketch marks. Preserve important outlines, facial features, lettering, symbols, and other defining details. Remove tiny isolated specks and accidental fragments, but retain meaningful small details. Use crisp boundaries and uniform solid fills, avoid fuzzy edges and narrow accidental slivers, and prefer broad shapes over realistic shading. Maintain the original aspect ratio and include the entire subject without cropping. Return a high-resolution PNG with a genuinely transparent background. Do not return an SVG; Cricut Color Studio will create the vector layers. Prioritize clean, cuttable shapes while preserving the identity and important details of the original artwork.</textarea>
+            </section>
             <section class="crop-tools">
               <h3>Crop the image</h3>
               <p class="field-help">Drag the purple crop edges to trim unwanted borders or watermarks. You can also fine-tune the percentages below, then choose Apply crop.</p>
@@ -129,6 +137,9 @@
                   <option value="1">1 mm²</option>
                   <option value="3">3 mm²</option>
                   <option value="6">6 mm²</option>
+                  <option value="10">10 mm²</option>
+                  <option value="12">12 mm²</option>
+                  <option value="20">20 mm²</option>
                 </select>
                 <p class="field-help">Threshold scales with the finished size, so tiny pieces are judged by real-world area.</p>
               </div>
@@ -140,7 +151,27 @@
                   <option value="moderate">Moderate — merge highlights and shadows</option>
                   <option value="strong">Strong — broad color regions</option>
                 </select>
-                <p class="field-help">Combines related light/dark shades while protecting very dark linework, then reduces to your chosen color count. While on, this replaces &ldquo;Merge similar colors&rdquo;. Review the preview before cutting.</p>
+                <p class="field-help">Combines related light/dark shades while protecting very dark linework. If Merge Similar Colors is enabled, similar near-black shades are also consolidated. Review the preview before cutting.</p>
+              </div>
+              <div>
+                <label for="simplifyStrength">Simplify for cutting</label>
+                <select id="simplifyStrength">
+                  <option value="off">Off</option>
+                  <option value="light">Light — pieces under 3 mm²</option>
+                  <option value="medium" selected>Medium — pieces under 6 mm²</option>
+                  <option value="strong">Strong — pieces under 12 mm²</option>
+                  <option value="max">Maximum — pieces under 20 mm²</option>
+                </select>
+                <p class="field-help">Before tracing, merges thin halos and small fragments into the color around them (instead of deleting them), so you get fewer, larger cut pieces and no specks. A larger &ldquo;Minimum piece area&rdquo; still wins. Review faces and small details.</p>
+              </div>
+              <div>
+                <label for="layerOverlap">Layer overlap (for side-by-side vinyl)</label>
+                <select id="layerOverlap">
+                  <option value="0" selected>Off</option>
+                  <option value="0.3">Small — 0.3 mm</option>
+                  <option value="0.5">Medium — 0.5 mm</option>
+                </select>
+                <p class="field-help">Slides lighter colors a tiny bit under the darker colors next to them, so little gaps do not show when layers do not line up perfectly. Leave Off for layers you stack on top of each other.</p>
               </div>
               <div>
                 <label class="checkbox-label" for="addBlackOutlines"><input id="addBlackOutlines" type="checkbox"> Keep dark linework as a separate black layer</label>
@@ -156,24 +187,33 @@
         </details>
 
         <div class="step-heading export-heading">
-          <div><span class="step-number">3</span><div><h2>Take it to Cricut</h2><p>Download your design files and follow the quick guide.</p></div></div>
+          <div><span class="step-number">3</span><div><h2>Take it to Cricut</h2><p>Download your files, then follow the three steps below.</p></div></div>
         </div>
         <div class="panel export-panel">
           <div class="export-row">
-            <div class="export-icon">SVG</div><div class="export-copy"><h3>Combined SVG</h3><p>All color layers in one file, kept in their original positions.</p></div><button id="downloadCombined" class="primary-btn" type="button" disabled>Download SVG</button>
+            <div class="export-icon">SVG</div><div class="export-copy"><h3>My design (one file)</h3><p>All your colors together, lined up the way you see them.</p></div><button id="downloadCombined" class="primary-btn" type="button" disabled>Download my design</button>
           </div>
           <div class="export-row">
-            <div class="export-icon">ZIP</div><div class="export-copy"><h3>Color-by-color package</h3><p>One SVG per color, plus a material checklist and Cricut instructions.</p></div><button id="downloadZip" class="secondary-btn" type="button" disabled>Download ZIP</button>
+            <div class="export-icon">ZIP</div><div class="export-copy"><h3>One file per color</h3><p>A separate file for each color, plus a how-to guide.</p></div><button id="downloadZip" class="secondary-btn" type="button" disabled>Download ZIP</button>
           </div>
           <div id="exportWarnings" class="warnings"></div>
+          <p id="grownUpNote" class="safety-note">Ask a grown-up for help with the cutting machine. It has a sharp blade and moving parts.</p>
+        </div>
+        <div class="panel next-steps">
+          <h3>What to do next</h3>
+          <ol>
+            <li>Open <strong>Cricut Design Space</strong> and start a new project. Choose <strong>Upload</strong>, then <strong>Upload Image</strong>, and pick the file you just downloaded.</li>
+            <li>Put it on your canvas and check that the size is right. Each color is its own layer.</li>
+            <li>Choose your material, press <strong>Make It</strong>, and follow the steps on the screen. Cut each color from its own sheet.</li>
+          </ol>
         </div>
       </div>
     </section>
     <section class="privacy-note"><span>🔒</span><p><strong>Your picture stays on your device.</strong> Image processing happens in this browser. Nothing is uploaded to a server.</p></section>
-    <footer>Made for curious makers · Cricut Color Studio v1.0.7.2 <span>Not affiliated with Cricut.</span></footer>
+    <footer>Made for curious makers · Cricut Color Studio v1.1.0 <span>Not affiliated with Cricut.</span></footer>
   </main>
   <canvas id="workCanvas" hidden></canvas>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
-  <script src="js/app.js?v=1.0.7.2" defer></script>
+  <script src="js/app.js?v=1.1.0" defer></script>
 </body>
 </html>

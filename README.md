@@ -1,7 +1,6 @@
 # Cricut Color Studio
-https://digitaldraven.github.io/CricutColorStudio/
 
-**Version:** 1.0.7.2  
+**Version:** 1.1.0  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
 **Hosting:** GitHub Pages (static site)  
 **Processing:** Browser-only; no image uploads, accounts, AI APIs, or application backend.
@@ -67,7 +66,7 @@ Image processing occurs locally in the browser. The app does not send images to 
 
 ## Versioning
 
-- Application version: `1.0.7`
+- Application version: `1.1.0`
 - SVG export metadata and project guide identify the app version.
 - Future releases should update the app version in `index.html`, `js/app.js` comments, and this README.
 
@@ -107,7 +106,7 @@ Safari and Chrome could export different palettes and path counts from the same 
 Remaining browser differences can come only from how each browser decodes the file and handles embedded ICC color profiles. For identical results, export source art as sRGB PNG.
 
 
-## V1.0.7.2 flatten-shading fixes
+## V1.0.7.1 flatten-shading fixes
 
 - **Anchored grouping.** Flatten used transitive union-find, so a gradient of small steps collapsed into one color regardless of the Subtle/Moderate/Strong limit. Colors are now processed heaviest-first and may only join a group whose anchor (heaviest member) is within the limits.
 - **Oversample, then reduce.** With flatten on, the palette is built at max(selected count, 12) colors, tonal variants are combined, and the result is reduced back to the selected count by merging the cheapest pair (pixel-weighted). Previously flatten could only leave fewer layers than requested.
@@ -115,3 +114,55 @@ Remaining browser differences can come only from how each browser decodes the fi
 - Shared `DARK_LUM` (48) constant for flatten protection and the black-outline mask.
 - Label remapping uses typed lookup tables instead of array spreading.
 - While flatten is on, the RGB "Merge similar colors" pass is skipped (flatten does its own anchored merging). That pass is transitive and, with the 12-color oversample, collapsed whole shade ramps before flatten could act.
+
+
+## Version 1.0.9
+
+- Added a copyable AI simplification prompt above the crop tool in Advanced Options. AI processing remains external and optional; this app still performs local vectorization and SVG export.
+- Added conservative cleanup for tiny, isolated, highly elongated sliver artifacts. Removed pixels are reported for review.
+- When Merge Similar Colors is enabled, similar very-dark palette variants are merged even when Flatten Shading is active; charcoal tones above the near-black cutoff remain eligible to stay distinct.
+- Updated flattening help text, version labels, and cache-busting URLs.
+- Preserve v1.0.7.2 as a fallback while testing.
+
+
+## Version 1.0.9
+
+- Added experimental **Simplify for Cutting** mode.
+- Applies additional conservative color-label smoothing before vector tracing.
+- Fills only small transparent holes fully enclosed by artwork; canvas-edge transparency is preserved.
+- Existing layer alignment, palette controls, and exports remain unchanged.
+- Validate on detailed artwork before cutting; this is a conservative first implementation, not a guarantee that every small shape is unwanted.
+
+
+## Version 1.0.9.1: Simplify for Cutting fix
+
+- **Checkbox now works immediately.** `simplifyForCutting` re-processes on change like the other options.
+- **Reassign instead of delete.** Previously, tiny pieces were deleted at trace time (and slivers set to transparent), leaving hundreds of specks that the hole-filler never saw because it ran earlier. Simplify now runs before any deletion: a 5x5 plurality filter removes thin halos, then every piece below the minimum size is recolored to the neighbor it touches most.
+- **Thickness-aware.** The filter radius derives from a 1 mm minimum feature size and the design width.
+- Sliver removal is skipped in Simplify mode (those fragments are already absorbed). The normal cleanup path is unchanged when Simplify is off.
+- A warnings-panel note reports how many pieces were merged.
+- ZIP guide version string corrected.
+
+
+## Version 1.0.9.2: Simplify strength and new defaults
+
+- **Simplify strength dropdown** replaces the checkbox: Off, Light (3 mm²), Medium (6 mm², default), Strong (12 mm²), Maximum (20 mm²). Each level sets both a minimum piece area and a minimum feature thickness (0.6 / 1.0 / 1.5 / 2.0 mm) for the smoothing radius.
+- **New defaults:** Cut detail = Easy cut; Simplify = Medium. Flatten shading stays Off (image dependent).
+- **Minimum piece area** now offers 10, 12 and 20 mm², and re-processes on change. Changing the finished width also re-processes, since all thresholds are real-world sizes.
+- **Layer list** shows how many pieces per layer are under 8 mm².
+- ZIP guide records the Simplify strength and the minimum piece area override.
+
+
+## Version 1.1.0: friendlier, safer, fewer pieces
+
+Made so a young maker can use it without help. All the Advanced controls are kept.
+
+- **Plain-language screens.** Friendly labels and help text ("How many colors?", "What will you cut?", "How easy to cut?"), layers show "pieces" and "tiny" instead of regions, pixels and mm², and the warnings are short and kind.
+- **Message about how hard the design is.** Under 60 pieces with no tiny ones: "Nice and simple!". Over 100 pieces: a gentle "tricky" note with what to try.
+- **Show tiny pieces in red** (preview only, never exported). A tiny piece is under 8 mm².
+- **Grown-up note and next steps.** A short safety note (blade, and heat for iron-on) and a three-step "What to do next" card for Design Space.
+- **Thin shapes are protected.** The smoothing filter can no longer break a ring or a narrow neck into separate pieces (the Batman emblem problem). Anything it would have split is left as it was.
+- **Tiny pieces are recolored in every mode**, including Simplify = Off. Cleanup no longer deletes pieces and leaves transparent specks. "Keep all pieces" still keeps everything.
+- **Hidden colors are remembered** when you change a setting. Colors are matched approximately, and the memory is cleared for a new picture or Start over.
+- **Layer overlap (Advanced)**: Off, 0.3 mm or 0.5 mm. For side-by-side vinyl, lighter colors slide a little under the darker ones so hairline gaps do not show. Lighter colors are drawn first in the combined SVG when overlap is on.
+- **Automated tests** in `tests/`. Run `node tests/run-tests.js` (no install needed). They check version strings, palette stability, specks, piece counts, protection of thin shapes, recoloring, overlap and color matching. Run them after every change.

@@ -39,3 +39,24 @@
 .layer-hidden{opacity:.62;background:#f7f6fa}
 .layer-hidden .layer-name{text-decoration:line-through}
 @media(max-width:480px){.crop-preview-wrap canvas{max-height:260px}.crop-handle-top,.crop-handle-bottom{width:48px;left:calc(50% - 24px)}}
+
+/* v1.0.8 AI prompt section, positioned immediately above crop tools */
+.ai-prompt-tools{padding:14px;border:1px solid #e4def4;border-radius:12px;background:#fbf9ff;margin-bottom:14px}
+.ai-prompt-tools h3{margin:0 0 6px}
+.ai-prompt-tools .field-help{margin:0 0 10px}
+.ai-prompt-text{display:block;width:100%;margin-top:10px;min-height:180px;padding:10px;border:1px solid #d7cfee;border-radius:8px;background:#fff;color:#282333;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
+.ai-prompt-text[hidden]{display:none}
+
+.friendly-note{margin:0 0 14px;padding:12px 16px;border-radius:14px;font-size:13px;line-height:1.5}
+.friendly-note.good{background:#f0fbf6;border:1px solid #d5f1e4;color:#27684d}
+.friendly-note.tricky{background:#fff7e8;border:1px solid #f3dfb4;color:#8b6323}
+.tiny-toggle{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;font-weight:700;cursor:pointer}
+.tiny-toggle input{width:18px;height:18px;accent-color:#ff2d55}
+.tiny-toggle span{font-weight:500;color:var(--muted)}
+.safety-note{margin:0 0 14px;padding:10px 14px;border-radius:12px;background:#eef4ff;border:1px solid #d3e1fb;color:#2f5188;font-size:12px;font-weight:600}
+.next-steps{margin-top:16px;padding:18px 22px}
+.next-steps h3{font:800 16px Nunito,sans-serif;margin:0 0 10px}
+.next-steps ol{margin:0;padding-left:22px;font-size:13px;line-height:1.6}
+.next-steps li+li{margin-top:6px}
+.layer-toggle input{width:20px;height:20px}
+@media(max-width:760px){.segmented button,.secondary-btn,.primary-btn{min-height:44px}}
