@@ -1,8 +1,8 @@
-/* Cricut Color Studio v1.0.5 — browser-only image processing */
+/* Cricut Color Studio v1.0.6 — browser-only image processing */
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { image: null, originalImage: null, fileName: "my-design", count: 4, layers: [], selected: -1, width: 6, merge: true, backgroundRemoved: true, backgroundPixelCount: 0, crop: {top:0,right:0,bottom:0,left:0} };
+  const state = { image: null, originalImage: null, fileName: "my-design", count: 4, layers: [], selected: -1, width: 6, merge: true, backgroundRemoved: true, backgroundPixelCount: 0, crop: {top:0,right:0,bottom:0,left:0}, cleanupStats: {watermarkPixels:0, tinyPixels:0} };
   const canvas = $("workCanvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
   const fileInput = $("fileInput");
   const paletteButtons = [...document.querySelectorAll("[data-colors]")];
@@ -352,6 +352,41 @@
     return paths.join(" ");
   }
   function hex(rgb){return "#"+rgb.map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,"0")).join("").toUpperCase();}
+  // Detect a conservative, word-like cluster of small components in the lower-right
+  // edge area, where source-image watermarks commonly appear. Only remove the cluster
+  // when several independent, small components form a shallow horizontal band.
+  function removeLikelyWatermarkCluster(pixels, w, h, colorCount) {
+    const components = findComponents(pixels, w, h, colorCount);
+    const candidates = [];
+    const maxComponentArea = Math.max(24, Math.floor(w*h*0.006));
+    for (let color=0; color<components.length; color++) {
+      for (const ids of components[color]) {
+        if (ids.length > maxComponentArea) continue;
+        let minX=w, minY=h, maxX=0, maxY=0;
+        for (const id of ids) {
+          const x=id%w, y=(id/w)|0;
+          if(x<minX)minX=x; if(x>maxX)maxX=x;
+          if(y<minY)minY=y; if(y>maxY)maxY=y;
+        }
+        const bw=maxX-minX+1, bh=maxY-minY+1;
+        if (minX < w*0.55 || minY < h*0.80 || maxY < h*0.88) continue;
+        if (bw > w*0.22 || bh > h*0.09) continue;
+        candidates.push({ids,minX,minY,maxX,maxY,area:ids.length});
+      }
+    }
+    if (candidates.length < 5) return 0;
+    const minX=Math.min(...candidates.map(c=>c.minX));
+    const minY=Math.min(...candidates.map(c=>c.minY));
+    const maxX=Math.max(...candidates.map(c=>c.maxX));
+    const maxY=Math.max(...candidates.map(c=>c.maxY));
+    const totalArea=candidates.reduce((n,c)=>n+c.area,0);
+    const spanX=maxX-minX+1, spanY=maxY-minY+1;
+    // Word-like: horizontally spread, shallow, close to the bottom, and small overall.
+    if (spanX < w*0.08 || spanY > h*0.10 || maxY < h*0.92 || totalArea > w*h*0.025) return 0;
+    for (const c of candidates) for (const id of c.ids) pixels[id]=255;
+    return totalArea;
+  }
+
   function processImage() {
     if(!state.image)return;
     const btn=$("processBtn");btn.disabled=true;btn.textContent="Working…";
@@ -361,6 +396,10 @@
         const {width:w,height:h,data}=state.image;
         const q=quantize(data,state.count,state.merge);
         q.pixels=smoothColorLabels(q.pixels,w,h,1);
+        // Remove only a strongly watermark-like cluster at the lower-right edge.
+        // This is deliberately conservative; cropping remains available for other layouts.
+        state.cleanupStats.watermarkPixels=removeLikelyWatermarkCluster(q.pixels,w,h,q.colors.length);
+        state.cleanupStats.tinyPixels=0;
         let outlineMask = null;
         if ($("addBlackOutlines").checked) {
           outlineMask = new Uint8Array(w*h); outlineMask.fill(255);
@@ -385,7 +424,7 @@
         for(let c=0;c<q.colors.length;c++){
           const paths=[];let keptArea=0, removed=0;
           for(const ids of comps[c]){
-            if(ids.length<minArea){removed+=ids.length;continue;}
+            if(ids.length<minArea){removed+=ids.length;state.cleanupStats.tinyPixels+=ids.length;continue;}
             const d=componentPath(ids,w,h);if(d){paths.push(d);keptArea+=ids.length;}
           }
           if(paths.length)layers.push({color:hex(q.colors[c]),paths,area:keptArea,regions:paths.length,removed,operation:"cut",averageRegionArea:keptArea/paths.length,visible:true});
@@ -426,7 +465,7 @@
       const op=l.operation||"cut";
       return `<g id="${escapeXml(l.id)}" data-name="${escapeXml(l.name)}" data-color="${l.color}" data-operation="${op}" fill="${l.color}" fill-rule="evenodd" stroke="none">${l.paths.map(d=>`<path d="${d}"/>`).join("")}</g>`;
     }).join("\n");
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${widthIn}in" height="${heightIn.toFixed(3)}in" viewBox="0 0 ${w} ${h}">\n<title>${escapeXml(state.fileName)} - Cricut Color Studio</title>\n<desc>Color-separated vector artwork. Imported SVG elements may need their operations assigned in Cricut Design Space.</desc>\n${groups}\n</svg>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${widthIn}in" height="${heightIn.toFixed(3)}in" viewBox="0 0 ${w} ${h}">\n<title>${escapeXml(state.fileName)} - Cricut Color Studio</title>\n<desc>Color-separated vector artwork generated by Cricut Color Studio 1.0.6. Imported SVG elements may need their operations assigned in Cricut Design Space.</desc>\n${groups}\n</svg>`;
   }
   function renderComposite(){
     const host=$("compositePreview");
@@ -479,6 +518,7 @@
       if(flagged)msg.push(`${flagged} layer${flagged===1?" has":"s have"} a high fragment count or small average pieces. Try Easy cut, merge similar colors, or crop unwanted details.`);
       const removed=state.layers.reduce((n,l)=>n+(l.removed||0),0);
       if(removed>0)msg.push("Cleanup removed tiny regions. Inspect important details before cutting.");
+      if(state.cleanupStats.watermarkPixels>0)msg.push(`Removed a likely bottom-right watermark/artifact cluster (${state.cleanupStats.watermarkPixels.toLocaleString()} pixels). Review the preview to confirm no artwork was removed.`);
     }
     msg.push("Cricut Design Space may import all SVG groups as Basic Cut. Assign Draw/Pen operations manually there when needed.");
     $("exportWarnings").textContent=msg.join(" ");
@@ -499,7 +539,7 @@
     });
     const m=$("material").value;
     const materialName=m==="htv"?"Iron-on / heat-transfer vinyl (HTV)":m==="paper"?"Cardstock / paper":"Adhesive vinyl";
-    const guide=`CRICUT COLOR STUDIO — V1.0.5
+    const guide=`CRICUT COLOR STUDIO — V1.0.6
 Project: ${state.fileName}
 Finished width: ${state.width} inches
 Material selected: ${materialName}

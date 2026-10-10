@@ -1,6 +1,6 @@
 # Cricut Color Studio
 
-**Version:** 1.0.5.1  
+**Version:** 1.0.6  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
 **Hosting:** GitHub Pages (static site)  
 **Processing:** Browser-only; no image uploads, accounts, AI APIs, or application backend.
@@ -65,7 +65,7 @@ Image processing occurs locally in the browser. The app does not send images to 
 
 ## Versioning
 
-- Application version: `1.0.5.1`
+- Application version: `1.0.6`
 - SVG export metadata and project guide identify the app version.
 - Future releases should update the app version in `index.html`, `js/app.js` comments, and this README.
 
@@ -83,3 +83,12 @@ Project code is provided under the MIT License. See `LICENSE`.
 
 
 V1.0.5.1 hotfix: versioned the stylesheet URL to prevent browsers from reusing cached CSS from the previous layer-panel layout.
+
+
+## V1.0.6 cleanup and export validation
+
+- Retains the selected-layer export rule: disabled layers are omitted from the combined SVG and from the per-color ZIP exports.
+- Adds conservative detection for a word-like cluster of small, separate components near the lower-right edge, a common location for source-image watermarks. When detected, the cluster is removed before vectorization and the app reports the pixel count so the preview can be checked. This heuristic is intentionally narrow and may not identify watermarks elsewhere; use the crop controls when a watermark overlaps artwork or is in another location.
+- Reports when tiny regions are removed and keeps the finished-size-aware minimum-piece-area controls.
+- SVG descriptions and the ZIP quick-start guide identify version 1.0.6.
+- Browser-only processing; no server or image upload is introduced.
