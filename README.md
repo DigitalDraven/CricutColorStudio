@@ -1,7 +1,6 @@
 # Cricut Color Studio
-https://digitaldraven.github.io/CricutColorStudio/
 
-**Version:** 1.0.5  
+**Version:** 1.0.5.1  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
 **Hosting:** GitHub Pages (static site)  
 **Processing:** Browser-only; no image uploads, accounts, AI APIs, or application backend.
@@ -48,7 +47,7 @@ The app scales the image to a maximum dimension of 700 pixels, optionally makes 
 
 This is an initial, deterministic V1 converter—not a professional illustration reconstruction tool. Shaded or photographic images may create many irregular patches. For best results, start with clear illustrations, cartoons, logos, and flat-color artwork.
 
-## V1.0.5 cleanup and crop
+## V1.0.5.1 cleanup and crop
 
 The default workflow targets four colors and enables similar-color merging. A one-pass label smoother only replaces isolated color speckles when a neighboring label strongly dominates; it does not blur or smooth vector paths directly. The optional black linework layer extracts very dark, low-saturation source pixels into a separate black cut layer, so inspect it carefully. The Fine detail, Balanced, and Easy cut presets use approximate minimum piece areas of 0.25, 1, and 3 mm² respectively, converted to pixel area using the chosen finished width. This is a heuristic, not a guarantee of minimum cuttable width; thin shapes may still be fragile. Advanced options can override the preset. Similar-color merging combines palette centers within an RGB Euclidean distance of 48. Crop values trim percentages from each image edge and can be reset.
 
@@ -66,7 +65,7 @@ Image processing occurs locally in the browser. The app does not send images to 
 
 ## Versioning
 
-- Application version: `1.0.5`
+- Application version: `1.0.5.1`
 - SVG export metadata and project guide identify the app version.
 - Future releases should update the app version in `index.html`, `js/app.js` comments, and this README.
 
@@ -75,9 +74,12 @@ Image processing occurs locally in the browser. The app does not send images to 
 Project code is provided under the MIT License. See `LICENSE`.
 
 
-## V1.0.5 notes
+## V1.0.5.1 notes
 
 - Color layer checkboxes control whether a layer appears in the composite preview and whether it is exported. Hidden layer geometry remains in memory and can be restored by checking the layer again; it is not deleted or regenerated. “Show all” and “Hide all” are available.
 - Advanced crop controls now include a visual preview. Drag the purple edge handles or adjust the percentage fields, then select Apply crop to regenerate the design.
 - Vector contours receive a conservative ~1-pixel simplification after collinear edges are merged. Inspect facial details and fine regions at the intended finished size before cutting.
 - All processing remains in the browser; there is no AI API or application backend. The ZIP download uses the existing JSZip CDN dependency.
+
+
+V1.0.5.1 hotfix: versioned the stylesheet URL to prevent browsers from reusing cached CSS from the previous layer-panel layout.
