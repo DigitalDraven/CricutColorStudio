@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f1ff">
-  <title>Cricut Color Studio v1.0.4</title>
+  <title>Cricut Color Studio v1.0.5</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="./" aria-label="Cricut Color Studio home"><span class="brand-mark">✂</span><span>Cricut <strong>Color Studio</strong></span></a>
-    <span class="version">V1.0.4 · Runs in your browser</span>
+    <span class="version">V1.0.5 · Runs in your browser</span>
   </header>
   <main class="shell">
     <section class="hero">
@@ -87,6 +87,7 @@
           </article>
           <article class="panel layers-card">
             <div class="card-title"><h3>Color layers</h3><span id="layerCount">0 layers</span></div>
+            <div class="layer-actions"><button id="showAllLayers" class="text-btn" type="button">Show all</button><button id="hideAllLayers" class="text-btn" type="button">Hide all</button></div>
             <div id="layerList" class="layer-list"></div>
           </article>
         </div>
@@ -96,7 +97,17 @@
           <div class="advanced-body">
             <section class="crop-tools">
               <h3>Crop the image</h3>
-              <p class="field-help">Trim unwanted edges, such as a border or watermark. Values are percentages of the original image.</p>
+              <p class="field-help">Drag the purple crop edges to trim unwanted borders or watermarks. You can also fine-tune the percentages below, then choose Apply crop.</p>
+              <div class="crop-preview-wrap" id="cropPreviewWrap">
+                <canvas id="cropPreviewCanvas" aria-label="Image crop preview"></canvas>
+                <div class="crop-shade" id="cropShade" aria-hidden="true"></div>
+                <div class="crop-window" id="cropWindow" role="group" aria-label="Draggable crop area">
+                  <span class="crop-handle crop-handle-top" data-edge="top" title="Drag to crop top"></span>
+                  <span class="crop-handle crop-handle-right" data-edge="right" title="Drag to crop right"></span>
+                  <span class="crop-handle crop-handle-bottom" data-edge="bottom" title="Drag to crop bottom"></span>
+                  <span class="crop-handle crop-handle-left" data-edge="left" title="Drag to crop left"></span>
+                </div>
+              </div>
               <div class="crop-grid">
                 <div><label for="cropTop">Top (%)</label><input id="cropTop" type="number" min="0" max="30" step="1" value="0"></div>
                 <div><label for="cropRight">Right (%)</label><input id="cropRight" type="number" min="0" max="30" step="1" value="0"></div>
@@ -149,10 +160,10 @@
       </div>
     </section>
     <section class="privacy-note"><span>🔒</span><p><strong>Your picture stays on your device.</strong> Image processing happens in this browser. Nothing is uploaded to a server.</p></section>
-    <footer>Made for curious makers · Cricut Color Studio v1.0.4 <span>Not affiliated with Cricut.</span></footer>
+    <footer>Made for curious makers · Cricut Color Studio v1.0.5 <span>Not affiliated with Cricut.</span></footer>
   </main>
   <canvas id="workCanvas" hidden></canvas>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
-  <script src="js/app.js?v=1.0.4" defer></script>
+  <script src="js/app.js?v=1.0.5" defer></script>
 </body>
 </html>

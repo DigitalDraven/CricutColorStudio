@@ -19,3 +19,23 @@
 .flat-mode-note{margin-top:8px;max-width:320px}
 .checkbox-label{display:flex!important;align-items:center;gap:9px;font-size:13px!important;margin-bottom:0!important}
 .checkbox-label input{accent-color:var(--purple);width:17px;height:17px}
+
+/* V1.0.5 visual crop and layer export controls */
+.crop-preview-wrap{position:relative;width:100%;max-width:560px;margin:14px 0 8px;line-height:0;border-radius:12px;overflow:hidden;background:#f4f1fa;border:1px solid var(--line);touch-action:pan-y}
+.crop-preview-wrap canvas{display:block;width:100%;height:auto;max-height:360px;object-fit:contain}
+.crop-window{position:absolute;left:0;right:0;top:0;bottom:0;border:2px solid var(--purple);box-shadow:0 0 0 9999px rgba(35,29,60,.42);pointer-events:none}
+.crop-handle{position:absolute;display:block;background:#fff;border:2px solid var(--purple);border-radius:6px;box-shadow:0 1px 5px #241b4933;pointer-events:auto;touch-action:none}
+.crop-handle-top,.crop-handle-bottom{height:14px;width:54px;left:calc(50% - 27px);cursor:ns-resize}
+.crop-handle-top{top:-8px}.crop-handle-bottom{bottom:-8px}
+.crop-handle-left,.crop-handle-right{width:14px;height:54px;top:calc(50% - 27px);cursor:ew-resize}
+.crop-handle-left{left:-8px}.crop-handle-right{right:-8px}
+.layer-actions{display:flex;justify-content:flex-end;gap:8px;margin:-3px 0 8px}
+.layer-actions .text-btn{font-size:11px;padding:4px 7px}
+.layer-item{padding:5px 8px 5px 5px;gap:8px;cursor:default}
+.layer-select{display:flex;align-items:center;gap:10px;flex:1;min-width:0;border:0;background:transparent;text-align:left;color:inherit;padding:5px;cursor:pointer;font:inherit}
+.layer-select .layer-name{text-align:left}
+.layer-toggle{display:flex!important;align-items:center;justify-content:center;min-width:30px;min-height:34px;margin:0!important;cursor:pointer}
+.layer-toggle input{width:17px;height:17px;accent-color:var(--purple);cursor:pointer}
+.layer-hidden{opacity:.62;background:#f7f6fa}
+.layer-hidden .layer-name{text-decoration:line-through}
+@media(max-width:480px){.crop-preview-wrap canvas{max-height:260px}.crop-handle-top,.crop-handle-bottom{width:48px;left:calc(50% - 24px)}}

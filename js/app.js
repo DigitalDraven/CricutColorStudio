@@ -1,4 +1,4 @@
-/* Cricut Color Studio v1.0.4 — browser-only image processing */
+/* Cricut Color Studio v1.0.5 — browser-only image processing */
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
@@ -32,6 +32,7 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         state.originalImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        renderCropSource();
         state.image = new ImageData(new Uint8ClampedArray(state.originalImage.data), state.originalImage.width, state.originalImage.height);
         state.fileName = safeName(file.name);
         state.crop = {top:0,right:0,bottom:0,left:0};
@@ -88,10 +89,63 @@
   $("resetCropBtn").addEventListener("click", () => {
     state.crop = {top:0,right:0,bottom:0,left:0};
     ["cropTop","cropRight","cropBottom","cropLeft"].forEach(id => $(id).value = 0);
-    applyBackgroundSetting(); if (state.image) processImage();
+    updateCropOverlay(); applyBackgroundSetting(); if (state.image) processImage();
   });
+  ["cropTop","cropRight","cropBottom","cropLeft"].forEach(id => $(id).addEventListener("input", updateCropOverlay));
+  setupCropDragging();
+  $("showAllLayers").addEventListener("click", () => setAllLayersVisible(true));
+  $("hideAllLayers").addEventListener("click", () => setAllLayersVisible(false));
   $("downloadCombined").addEventListener("click", downloadCombined);
   $("downloadZip").addEventListener("click", downloadZip);
+
+  function renderCropSource() {
+    const preview = $("cropPreviewCanvas");
+    if (!state.originalImage || !preview) return;
+    preview.width = state.originalImage.width; preview.height = state.originalImage.height;
+    preview.getContext("2d").putImageData(state.originalImage, 0, 0);
+    updateCropOverlay();
+  }
+  function cropValuesFromInputs() {
+    return {top:clampPercent($("cropTop").value),right:clampPercent($("cropRight").value),bottom:clampPercent($("cropBottom").value),left:clampPercent($("cropLeft").value)};
+  }
+  function updateCropOverlay() {
+    const crop = cropValuesFromInputs(), win = $("cropWindow"), shade = $("cropShade");
+    if (!win || !shade) return;
+    const left = Math.min(60, crop.left), top = Math.min(60, crop.top);
+    const right = Math.min(60, crop.right), bottom = Math.min(60, crop.bottom);
+    win.style.left = left + "%"; win.style.top = top + "%";
+    win.style.right = right + "%"; win.style.bottom = bottom + "%";
+    shade.style.setProperty("--crop-top", top + "%"); shade.style.setProperty("--crop-right", right + "%");
+    shade.style.setProperty("--crop-bottom", bottom + "%"); shade.style.setProperty("--crop-left", left + "%");
+  }
+  function setupCropDragging() {
+    const win = $("cropWindow"), wrap = $("cropPreviewWrap");
+    if (!win || !wrap) return;
+    let drag = null;
+    win.querySelectorAll("[data-edge]").forEach(handle => {
+      handle.addEventListener("pointerdown", e => {
+        if (!state.originalImage) return;
+        e.preventDefault(); e.stopPropagation();
+        drag = {edge:handle.dataset.edge, startX:e.clientX, startY:e.clientY, initial:cropValuesFromInputs()};
+        handle.setPointerCapture?.(e.pointerId);
+      });
+      handle.addEventListener("pointermove", e => {
+        if (!drag || !state.originalImage) return;
+        const rect = wrap.getBoundingClientRect();
+        const dx = (e.clientX-drag.startX)/rect.width*100, dy=(e.clientY-drag.startY)/rect.height*100;
+        const next={...drag.initial};
+        if(drag.edge==="left") next.left=clampPercent(drag.initial.left+dx);
+        if(drag.edge==="right") next.right=clampPercent(drag.initial.right-dx);
+        if(drag.edge==="top") next.top=clampPercent(drag.initial.top+dy);
+        if(drag.edge==="bottom") next.bottom=clampPercent(drag.initial.bottom-dy);
+        if(next.left+next.right>60 || next.top+next.bottom>60) return;
+        for(const edge of ["top","right","bottom","left"]) $("crop"+edge[0].toUpperCase()+edge.slice(1)).value=Math.round(next[edge]);
+        updateCropOverlay();
+      });
+      const end = () => { drag=null; };
+      handle.addEventListener("pointerup",end); handle.addEventListener("pointercancel",end);
+    });
+  }
 
   function clampPercent(value) { return Math.max(0, Math.min(30, Number(value) || 0)); }
 
@@ -237,6 +291,30 @@
     }
     return comps;
   }
+  function pointSegmentDistance(p, a, b) {
+    const dx=b[0]-a[0], dy=b[1]-a[1];
+    if(dx===0 && dy===0) return Math.hypot(p[0]-a[0],p[1]-a[1]);
+    const t=Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(dx*dx+dy*dy)));
+    return Math.hypot(p[0]-(a[0]+t*dx),p[1]-(a[1]+t*dy));
+  }
+  function simplifyOpen(points, tolerance) {
+    if(points.length<=3) return points;
+    let max=0,index=0; const first=points[0],last=points[points.length-1];
+    for(let i=1;i<points.length-1;i++){const d=pointSegmentDistance(points[i],first,last);if(d>max){max=d;index=i;}}
+    if(max<=tolerance) return [first,last];
+    const left=simplifyOpen(points.slice(0,index+1),tolerance),right=simplifyOpen(points.slice(index),tolerance);
+    return left.slice(0,-1).concat(right);
+  }
+  function simplifyClosed(points, tolerance=1.05) {
+    if(points.length<8) return points;
+    let far=1,max=-1;
+    for(let i=1;i<points.length;i++){const d=(points[i][0]-points[0][0])**2+(points[i][1]-points[0][1])**2;if(d>max){max=d;far=i;}}
+    const a=simplifyOpen(points.slice(0,far+1),tolerance);
+    const b=simplifyOpen(points.slice(far).concat([points[0]]),tolerance);
+    const merged=a.slice(0,-1).concat(b.slice(0,-1));
+    return merged.length>=3 ? merged : points;
+  }
+
   // Trace each connected pixel region as oriented boundary edges. Collinear edges are merged.
   function componentPath(ids, w, h) {
     const set=new Set(ids), edges=[];
@@ -264,7 +342,11 @@
       if(points.length>=3){
         const simplified=[];
         for(let i=0;i<points.length;i++){const prev=points[(i+points.length-1)%points.length],curp=points[i],next=points[(i+1)%points.length];if((curp[0]-prev[0])*(next[1]-curp[1])!==(curp[1]-prev[1])*(next[0]-curp[0]))simplified.push(curp);}
-        if(simplified.length>=3)paths.push("M"+simplified.map(p=>p[0]+","+p[1]).join(" L")+" Z");
+        if(simplified.length>=3) {
+          // A light 1-pixel contour simplification removes stair-step noise while preserving larger features.
+          const clean=simplifyClosed(simplified,1.05);
+          paths.push("M"+clean.map(p=>p[0]+","+p[1]).join(" L")+" Z");
+        }
       }
     }
     return paths.join(" ");
@@ -306,7 +388,7 @@
             if(ids.length<minArea){removed+=ids.length;continue;}
             const d=componentPath(ids,w,h);if(d){paths.push(d);keptArea+=ids.length;}
           }
-          if(paths.length)layers.push({color:hex(q.colors[c]),paths,area:keptArea,regions:paths.length,removed,operation:"cut",averageRegionArea:keptArea/paths.length});
+          if(paths.length)layers.push({color:hex(q.colors[c]),paths,area:keptArea,regions:paths.length,removed,operation:"cut",averageRegionArea:keptArea/paths.length,visible:true});
         }
         // Largest / darkest layers are named predictably, without guessing semantic object names.
         // Optional outline layer separates very dark source pixels into a dedicated black cut layer.
@@ -320,7 +402,7 @@
             const d=componentPath(ids,w,h);
             if (d) { outlinePaths.push(d); outlineArea+=ids.length; }
           }
-          if (outlinePaths.length) layers.push({color:"#08090d",paths:outlinePaths,area:outlineArea,regions:outlinePaths.length,removed:0,operation:"cut",averageRegionArea:outlineArea/outlinePaths.length,isOutline:true});
+          if (outlinePaths.length) layers.push({color:"#08090d",paths:outlinePaths,area:outlineArea,regions:outlinePaths.length,removed:0,operation:"cut",averageRegionArea:outlineArea/outlinePaths.length,isOutline:true,visible:true});
         }
         layers.sort((a,b)=>b.area-a.area);
         layers.forEach((l,i)=>{l.name="Color "+(i+1)+(l.operation==="draw"?" · draw intended":"");l.id="layer-"+(i+1);});
@@ -332,14 +414,15 @@
         $("dimensions").textContent=widthIn.toFixed(1)+'" wide';
         $("statusPill").textContent="Preview ready";
         renderLayers();renderComposite();updateWarnings();
-        $("downloadCombined").disabled=false;$("downloadZip").disabled=false;
+        updateExportButtons();
       }catch(e){alert(e.message||"Something went wrong while making the layers.");}
       finally{btn.disabled=false;btn.textContent="Make my color layers";}
     },30);
   }
-  function svgFor(layers, visibleOnly=false) {
+  function svgFor(layers, visibleOnly=true) {
     const w=state.image.width,h=state.image.height, widthIn=state.width, heightIn=widthIn*h/w;
-    const groups=layers.map(l=>{
+    const included=visibleOnly ? layers.filter(l=>l.visible !== false) : layers;
+    const groups=included.map(l=>{
       const op=l.operation||"cut";
       return `<g id="${escapeXml(l.id)}" data-name="${escapeXml(l.name)}" data-color="${l.color}" data-operation="${op}" fill="${l.color}" fill-rule="evenodd" stroke="none">${l.paths.map(d=>`<path d="${d}"/>`).join("")}</g>`;
     }).join("\n");
@@ -348,23 +431,38 @@
   function renderComposite(){
     const host=$("compositePreview");
     const selected=state.selected;
-    let layers=state.layers;
-    if(selected>=0)layers=[state.layers[selected]];
-    host.innerHTML=svgFor(layers);
-    const svg=host.querySelector("svg");svg.removeAttribute("width");svg.removeAttribute("height");svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+    let layers=state.layers.filter(l=>l.visible !== false);
+    if(selected>=0 && state.layers[selected] && state.layers[selected].visible !== false) layers=[state.layers[selected]];
+    host.innerHTML=layers.length ? svgFor(layers) : '<div class="empty-preview">Turn on a color layer to preview your design.</div>';
+    const svg=host.querySelector("svg");
+    if(svg){svg.removeAttribute("width");svg.removeAttribute("height");svg.setAttribute("preserveAspectRatio","xMidYMid meet");}
     $("legend").innerHTML="";
     state.layers.forEach((l,i)=>{const b=document.createElement("button");b.className="legend-chip"+(i===selected?" active":"");b.style.background=l.color;b.title=l.name;b.setAttribute("aria-label","Preview "+l.name);b.addEventListener("click",()=>selectLayer(i));$("legend").appendChild(b);});
   }
   function renderLayers(){
     const host=$("layerList");host.innerHTML="";
     state.layers.forEach((l,i)=>{
-      const b=document.createElement("button");b.className="layer-item"+(i===state.selected?" active":"");b.type="button";
+      const row=document.createElement("div");row.className="layer-item"+(i===state.selected?" active":"")+(l.visible===false?" layer-hidden":"");
+      const select=document.createElement("button");select.className="layer-select";select.type="button";select.setAttribute("aria-label","Inspect "+l.name);
       const sw=document.createElement("span");sw.className="swatch";sw.style.background=l.color;
       const name=document.createElement("span");name.className="layer-name";name.textContent=l.name;
       const meta=document.createElement("span");meta.className="layer-meta";meta.textContent=`${l.regions} region${l.regions===1?"":"s"} · ${l.area.toLocaleString()} px${l.operation==="draw"?" · draw intended":""}`;
-      name.appendChild(meta);const eye=document.createElement("span");eye.className="layer-eye";eye.textContent="◉";
-      b.append(sw,name,eye);b.addEventListener("click",()=>selectLayer(i));host.appendChild(b);
+      name.appendChild(meta);select.append(sw,name);select.addEventListener("click",()=>selectLayer(i));
+      const label=document.createElement("label");label.className="layer-toggle";label.title=(l.visible===false?"Include ":"Exclude ")+l.name+" in preview and exports";
+      const check=document.createElement("input");check.type="checkbox";check.checked=l.visible!==false;check.setAttribute("aria-label","Include "+l.name+" in preview and exports");
+      check.addEventListener("change",()=>{l.visible=check.checked;if(state.selected===i&&!l.visible)state.selected=-1;renderLayers();renderComposite();updateWarnings();updateExportButtons();});
+      label.append(check);row.append(select,label);host.appendChild(row);
     });
+  }
+  function setAllLayersVisible(visible){
+    state.layers.forEach(l=>l.visible=visible);
+    if(!visible)state.selected=-1;
+    renderLayers();renderComposite();updateWarnings();updateExportButtons();
+  }
+  function updateExportButtons(){
+    const count=state.layers.filter(l=>l.visible!==false).length;
+    $("downloadCombined").disabled=count===0;$("downloadZip").disabled=count===0;
+    const summary=$("layerCount");if(summary)summary.textContent=`${count} of ${state.layers.length} layers selected`;
   }
   function selectLayer(i){state.selected=state.selected===i?-1:i;renderLayers();renderComposite();}
   function updateWarnings(){
@@ -373,8 +471,10 @@
     if(m==="paper")msg.push("Paper/cardstock: test small details and use the correct material setting and blade.");
     if(m==="vinyl")msg.push("Adhesive vinyl: small islands and narrow pieces may be difficult to weed.");
     if(state.layers.length) {
-      const totalRegions=state.layers.reduce((n,l)=>n+l.regions,0);
-      const flagged=state.layers.filter(l=>l.regions>100 || l.averageRegionArea<18).length;
+      const activeLayers=state.layers.filter(l=>l.visible!==false);
+      const totalRegions=activeLayers.reduce((n,l)=>n+l.regions,0);
+      const flagged=activeLayers.filter(l=>l.regions>100 || l.averageRegionArea<18).length;
+      if(activeLayers.length<state.layers.length)msg.push(`${state.layers.length-activeLayers.length} layer(s) are turned off and will not be included in exports.`);
       if(totalRegions>80)msg.push(`This design has ${totalRegions} separate regions across ${state.layers.length} colors.`);
       if(flagged)msg.push(`${flagged} layer${flagged===1?" has":"s have"} a high fragment count or small average pieces. Try Easy cut, merge similar colors, or crop unwanted details.`);
       const removed=state.layers.reduce((n,l)=>n+(l.removed||0),0);
@@ -386,19 +486,20 @@
   function download(name,content,type="image/svg+xml;charset=utf-8"){
     const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200);
   }
-  function downloadCombined(){if(state.layers.length)download(state.fileName+"-cricut-color-studio.svg",svgFor(state.layers));}
+  function downloadCombined(){const active=state.layers.filter(l=>l.visible!==false);if(active.length)download(state.fileName+"-cricut-color-studio.svg",svgFor(active));}
   async function downloadZip(){
-    if(!state.layers.length)return;
+    const activeLayers=state.layers.filter(l=>l.visible!==false);
+    if(!activeLayers.length)return;
     if(typeof JSZip==="undefined"){alert("The ZIP helper could not load. Check your internet connection and refresh; combined SVG export still works.");return;}
     const zip=new JSZip(),folder=zip.folder(state.fileName+"-cricut-color-studio");
-    folder.file(state.fileName+"-combined.svg",svgFor(state.layers));
-    state.layers.forEach((l,i)=>{
+    folder.file(state.fileName+"-combined.svg",svgFor(activeLayers));
+    activeLayers.forEach((l,i)=>{
       const layerSvg=svgFor([l]).replace(`id="${escapeXml(l.id)}"`,`id="${escapeXml(l.id)}"`);
       folder.file(String(i+1).padStart(2,"0")+"-"+l.color.slice(1)+".svg",layerSvg);
     });
     const m=$("material").value;
     const materialName=m==="htv"?"Iron-on / heat-transfer vinyl (HTV)":m==="paper"?"Cardstock / paper":"Adhesive vinyl";
-    const guide=`CRICUT COLOR STUDIO — V1.0.4
+    const guide=`CRICUT COLOR STUDIO — V1.0.5
 Project: ${state.fileName}
 Finished width: ${state.width} inches
 Material selected: ${materialName}
@@ -407,11 +508,11 @@ Flat Color mode: Yes
 Similar colors merged: ${state.merge ? "Yes" : "No"}
 Separate black linework: ${$("addBlackOutlines").checked ? "Yes (experimental)" : "No"}
 Crop percentages (top/right/bottom/left): ${state.crop.top}/${state.crop.right}/${state.crop.bottom}/${state.crop.left}
-Color layers: ${state.layers.length}
+Color layers exported: ${activeLayers.length} of ${state.layers.length}
 
 FILES
 - ${state.fileName}-combined.svg: all color layers in their original alignment.
-- Numbered SVG files: one color layer per file, all sharing the same viewBox and dimensions.
+- Numbered SVG files: one enabled color layer per file, all sharing the same viewBox and dimensions. Disabled layers are omitted from all SVG exports.
 
 QUICK START
 1. Open Cricut Design Space and create a new project.
