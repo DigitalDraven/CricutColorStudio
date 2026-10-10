@@ -5,3 +5,12 @@
 @media(max-width:480px){.controls{grid-template-columns:1fr}.control-group:first-child{grid-column:auto}.step-heading{align-items:flex-start}.step-heading p{max-width:240px}.status-pill{display:none}.export-row{flex-wrap:wrap}.export-copy{min-width:calc(100% - 65px)}.export-row button{width:100%}.upload-panel{padding:28px 16px}.segmented button{font-size:11px}.artboard{min-height:180px}}
 
 .background-control{grid-column:1/-1}.checkbox-label{display:flex!important;align-items:center;gap:9px;font-size:13px!important;margin-bottom:0!important}.checkbox-label input{accent-color:var(--purple);width:17px;height:17px}
+
+/* V1.0.3 craft-ready cleanup and crop controls */
+.crop-tools{padding:0 0 18px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+.crop-tools h3{font:800 15px Nunito,sans-serif;margin:0 0 4px}
+.crop-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:13px}
+.crop-grid label{display:block;font-size:11px;font-weight:800;margin-bottom:6px}
+.crop-grid input{width:100%;min-width:0;border:1px solid #ded9ec;border-radius:10px;padding:10px;font:500 13px "DM Sans",sans-serif}
+.layer-warning{font-size:12px;color:#9a681b;margin-left:4px}
+@media(max-width:480px){.crop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f1ff">
-  <title>Cricut Color Studio v1.0.2</title>
+  <title>Cricut Color Studio v1.0.3</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="./" aria-label="Cricut Color Studio home"><span class="brand-mark">✂</span><span>Cricut <strong>Color Studio</strong></span></a>
-    <span class="version">V1.0.2 · Runs in your browser</span>
+    <span class="version">V1.0.3 · Runs in your browser</span>
   </header>
   <main class="shell">
     <section class="hero">
@@ -57,6 +57,15 @@
           <p class="field-help" id="backgroundStatus" aria-live="polite">Background removal is ready.</p>
         </div>
         <div class="control-group">
+          <label for="cleanupPreset">Cut detail</label>
+          <select id="cleanupPreset">
+            <option value="fine">Fine detail</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="easy">Easy cut</option>
+          </select>
+          <p class="field-help">Cleanup adjusts to the finished design size.</p>
+        </div>
+        <div class="control-group">
           <label for="designWidth">Finished width</label>
           <div class="input-unit"><input id="designWidth" type="number" min="2" max="24" step="0.5" value="6"><span>inches</span></div>
           <p class="field-help">Height scales to keep the image's proportions.</p>
@@ -84,16 +93,32 @@
         <details class="panel advanced" id="advancedPanel">
           <summary><span><strong>Advanced options</strong><small>For when you want more control</small></span><span class="chevron">⌄</span></summary>
           <div class="advanced-body">
+            <section class="crop-tools">
+              <h3>Crop the image</h3>
+              <p class="field-help">Trim unwanted edges, such as a border or watermark. Values are percentages of the original image.</p>
+              <div class="crop-grid">
+                <div><label for="cropTop">Top (%)</label><input id="cropTop" type="number" min="0" max="30" step="1" value="0"></div>
+                <div><label for="cropRight">Right (%)</label><input id="cropRight" type="number" min="0" max="30" step="1" value="0"></div>
+                <div><label for="cropBottom">Bottom (%)</label><input id="cropBottom" type="number" min="0" max="30" step="1" value="0"></div>
+                <div><label for="cropLeft">Left (%)</label><input id="cropLeft" type="number" min="0" max="30" step="1" value="0"></div>
+              </div>
+              <div class="advanced-actions">
+                <button id="applyCropBtn" class="secondary-btn" type="button">Apply crop</button>
+                <button id="resetCropBtn" class="secondary-btn" type="button">Reset crop</button>
+              </div>
+            </section>
             <div class="advanced-grid">
-              <div>
-                <label for="minRegion">Remove tiny pieces</label>
+                            <div>
+                <label for="minRegion">Minimum piece area</label>
                 <select id="minRegion">
+                  <option value="auto" selected>Follow cut detail preset</option>
                   <option value="0">Keep all pieces</option>
-                  <option value="4" selected>Light cleanup</option>
-                  <option value="12">Medium cleanup</option>
-                  <option value="30">Strong cleanup</option>
+                  <option value="0.25">0.25 mm²</option>
+                  <option value="1">1 mm²</option>
+                  <option value="3">3 mm²</option>
+                  <option value="6">6 mm²</option>
                 </select>
-                <p class="field-help">Small disconnected areas under this pixel-area threshold are omitted.</p>
+                <p class="field-help">Threshold scales with the finished size, so tiny pieces are judged by real-world area.</p>
               </div>
               <div>
                 <label for="outlineMode">Dark outline handling</label>
@@ -127,10 +152,10 @@
       </div>
     </section>
     <section class="privacy-note"><span>🔒</span><p><strong>Your picture stays on your device.</strong> Image processing happens in this browser. Nothing is uploaded to a server.</p></section>
-    <footer>Made for curious makers · Cricut Color Studio v1.0.2 <span>Not affiliated with Cricut.</span></footer>
+    <footer>Made for curious makers · Cricut Color Studio v1.0.3 <span>Not affiliated with Cricut.</span></footer>
   </main>
   <canvas id="workCanvas" hidden></canvas>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
-  <script src="js/app.js?v=1.0.2" defer></script>
+  <script src="js/app.js?v=1.0.3" defer></script>
 </body>
 </html>

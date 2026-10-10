@@ -1,6 +1,6 @@
 # Cricut Color Studio
 
-**Version:** 1.0.2  
+**Version:** 1.0.3  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
 **Hosting:** GitHub Pages (static site)  
 **Processing:** Browser-only; no image uploads, accounts, AI APIs, or application backend.
@@ -13,8 +13,11 @@
 - 4-, 8-, and 12-color simplification presets.
 - Connected color-region detection and vector path generation.
 - Individual layer preview and combined design preview.
-- Automatic small-region cleanup with adjustable threshold.
-- Advanced option to reduce the palette further.
+- Finished-size-aware cleanup presets: Fine detail, Balanced, and Easy cut.
+- Advanced physical-area override for tiny-region filtering.
+- Optional merging of visually similar palette colors.
+- Crop controls for trimming borders or watermarks.
+- Warnings for layers with high region counts or small average pieces.
 - Combined SVG export and ZIP export containing per-color SVGs plus a quick-start guide.
 - Material-specific reminders for adhesive vinyl, cardstock/paper, and HTV.
 
@@ -34,9 +37,13 @@ The ZIP export uses JSZip from jsDelivr CDN. The core image processing and combi
 
 ## How the vectorizer works
 
-The app scales the image to a maximum dimension of 700 pixels, optionally makes edge-connected near-white background pixels transparent, reduces only visible pixels to a color palette with a browser-side k-means palette, detects 4-connected regions, filters tiny components, and traces pixel boundaries into closed SVG paths. Paths are simplified by removing collinear points.
+The app scales the image to a maximum dimension of 700 pixels, optionally makes edge-connected near-white background pixels transparent, reduces only visible pixels to a color palette with a browser-side k-means palette, detects 4-connected regions, filters tiny components using a minimum physical-area threshold derived from the selected finished width, and traces pixel boundaries into closed SVG paths. Paths are simplified by removing collinear points.
 
 This is an initial, deterministic V1 converter—not a professional illustration reconstruction tool. Shaded or photographic images may create many irregular patches. For best results, start with clear illustrations, cartoons, logos, and flat-color artwork.
+
+## V1.0.3 cleanup and crop
+
+The Fine detail, Balanced, and Easy cut presets use approximate minimum piece areas of 0.25, 1, and 3 mm² respectively, converted to pixel area using the chosen finished width. This is a heuristic, not a guarantee of minimum cuttable width; thin shapes may still be fragile. Advanced options can override the preset. Similar-color merging combines palette centers within an RGB Euclidean distance of 48. Crop values trim percentages from each image edge and can be reset.
 
 ## Important Cricut notes
 
@@ -52,7 +59,7 @@ Image processing occurs locally in the browser. The app does not send images to 
 
 ## Versioning
 
-- Application version: `1.0.2`
+- Application version: `1.0.3`
 - SVG export metadata and project guide identify the app version.
 - Future releases should update the app version in `index.html`, `js/app.js` comments, and this README.
 

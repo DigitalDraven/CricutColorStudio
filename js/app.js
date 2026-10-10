@@ -1,8 +1,8 @@
-/* Cricut Color Studio v1.0.2 — browser-only image processing */
+/* Cricut Color Studio v1.0.3 — browser-only image processing */
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { image: null, originalImage: null, fileName: "my-design", count: 8, layers: [], selected: -1, width: 6, merge: false, backgroundRemoved: true, backgroundPixelCount: 0 };
+  const state = { image: null, originalImage: null, fileName: "my-design", count: 8, layers: [], selected: -1, width: 6, merge: false, backgroundRemoved: true, backgroundPixelCount: 0, crop: {top:0,right:0,bottom:0,left:0} };
   const canvas = $("workCanvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
   const fileInput = $("fileInput");
   const paletteButtons = [...document.querySelectorAll("[data-colors]")];
@@ -34,6 +34,8 @@
         state.originalImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         state.image = new ImageData(new Uint8ClampedArray(state.originalImage.data), state.originalImage.width, state.originalImage.height);
         state.fileName = safeName(file.name);
+        state.crop = {top:0,right:0,bottom:0,left:0};
+        ["cropTop","cropRight","cropBottom","cropLeft"].forEach(id => { if ($(id)) $(id).value = 0; });
         applyBackgroundSetting();
         $("uploadPanel").classList.add("hidden");
         $("workspace").classList.remove("hidden");
@@ -62,17 +64,54 @@
   $("rebuildBtn").addEventListener("click", processImage);
   $("mergeBtn").addEventListener("click", () => {
     state.merge = !state.merge;
-    $("mergeBtn").textContent = state.merge ? "Use full color detail" : "Merge similar colors";
+    $("mergeBtn").textContent = state.merge ? "Stop merging colors" : "Merge similar colors";
     processImage();
   });
   $("material").addEventListener("change", updateMaterialHelp);
   $("removeBackground").addEventListener("change", () => { applyBackgroundSetting(); if (state.image) processImage(); });
+  $("cleanupPreset").addEventListener("change", () => { if ($("minRegion").value === "auto" && state.image) processImage(); });
+  $("applyCropBtn").addEventListener("click", () => {
+    const nextCrop = {
+      top: clampPercent($("cropTop").value),
+      right: clampPercent($("cropRight").value),
+      bottom: clampPercent($("cropBottom").value),
+      left: clampPercent($("cropLeft").value)
+    };
+    if (nextCrop.left + nextCrop.right > 60 || nextCrop.top + nextCrop.bottom > 60) {
+      alert("Please leave at least 40% of the image visible in each direction."); return;
+    }
+    state.crop = nextCrop;
+    applyBackgroundSetting(); if (state.image) processImage();
+  });
+  $("resetCropBtn").addEventListener("click", () => {
+    state.crop = {top:0,right:0,bottom:0,left:0};
+    ["cropTop","cropRight","cropBottom","cropLeft"].forEach(id => $(id).value = 0);
+    applyBackgroundSetting(); if (state.image) processImage();
+  });
   $("downloadCombined").addEventListener("click", downloadCombined);
   $("downloadZip").addEventListener("click", downloadZip);
 
+  function clampPercent(value) { return Math.max(0, Math.min(30, Number(value) || 0)); }
+
+  function cropImageData(src, crop) {
+    const left = Math.floor(src.width * crop.left / 100);
+    const right = Math.floor(src.width * crop.right / 100);
+    const top = Math.floor(src.height * crop.top / 100);
+    const bottom = Math.floor(src.height * crop.bottom / 100);
+    const width = Math.max(1, src.width - left - right);
+    const height = Math.max(1, src.height - top - bottom);
+    const out = new ImageData(width, height);
+    for (let y=0; y<height; y++) {
+      const from = ((y + top) * src.width + left) * 4;
+      const to = y * width * 4;
+      out.data.set(src.data.subarray(from, from + width * 4), to);
+    }
+    return out;
+  }
+
   function applyBackgroundSetting() {
     if (!state.originalImage) return;
-    const src = state.originalImage;
+    const src = cropImageData(state.originalImage, state.crop);
     const out = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
     state.backgroundRemoved = $("removeBackground").checked;
     state.backgroundPixelCount = 0;
@@ -115,7 +154,7 @@
     updateWarnings();
   }
   function colorDist(a,b) { return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2; }
-  function quantize(data, requested) {
+  function quantize(data, requested, mergeSimilar = false) {
     const n = data.length / 4, samples = [], opaque = [];
     for (let i=0;i<n;i++) if (data[i*4+3] !== 0) opaque.push(i);
     if (!opaque.length) throw new Error("The image appears to be fully transparent. Turn off background removal or try another image.");
@@ -133,11 +172,29 @@
       for(const c of samples){let best=0,bd=Infinity;for(let j=0;j<k;j++){const d=colorDist(c,centers[j]);if(d<bd){bd=d;best=j;}}const s=sums[best];s[0]+=c[0];s[1]+=c[1];s[2]+=c[2];s[3]++;}
       for(let j=0;j<k;j++)if(sums[j][3])centers[j]=sums[j].slice(0,3).map(v=>Math.round(v/sums[j][3]));
     }
+    // Optionally combine nearby palette colors into shared groups.
+    let palette = centers.map(c => [...c]);
+    let centerMap = centers.map((_,i) => i);
+    if (mergeSimilar && palette.length > 1) {
+      const parent = palette.map((_,i) => i);
+      const root = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+      const join = (a,b) => { a=root(a); b=root(b); if(a!==b) parent[b]=a; };
+      const threshold = 48 * 48;
+      for (let a=0; a<palette.length; a++) for (let b=a+1; b<palette.length; b++) {
+        if (colorDist(palette[a],palette[b]) <= threshold) join(a,b);
+      }
+      const groups = new Map();
+      palette.forEach((c,i) => { const r=root(i); if(!groups.has(r)) groups.set(r,[]); groups.get(r).push(c); });
+      const roots=[...groups.keys()];
+      const merged=roots.map(r=>{const group=groups.get(r);return [0,1,2].map(ch=>Math.round(group.reduce((sum,c)=>sum+c[ch],0)/group.length));});
+      centerMap=palette.map((_,i)=>roots.indexOf(root(i)));
+      palette=merged;
+    }
     const pixels=new Uint8Array(n); pixels.fill(255); // 255 is reserved for transparent pixels
-    for(const i of opaque){const p=i*4,c=[data[p],data[p+1],data[p+2]];let best=0,bd=Infinity;for(let j=0;j<k;j++){const d=colorDist(c,centers[j]);if(d<bd){bd=d;best=j;}}pixels[i]=best;}
+    for(const i of opaque){const p=i*4,c=[data[p],data[p+1],data[p+2]];let best=0,bd=Infinity;for(let j=0;j<centers.length;j++){const d=colorDist(c,centers[j]);if(d<bd){bd=d;best=j;}}pixels[i]=centerMap[best];}
     const used=[...new Set(opaque.map(i=>pixels[i]))].sort((a,b)=>a-b), remap=new Map(used.map((v,i)=>[v,i]));
     for(const i of opaque)pixels[i]=remap.get(pixels[i]);
-    return {pixels, colors:used.map(i=>centers[i])};
+    return {pixels, colors:used.map(i=>palette[i])};
   }
   function findComponents(pixels, w, h, colorCount) {
     const seen = new Uint8Array(pixels.length), comps = Array.from({length:colorCount},()=>[]);
@@ -196,9 +253,13 @@
     setTimeout(()=>{
       try {
         const {width:w,height:h,data}=state.image;
-        const q=quantize(data,state.merge?Math.max(2,state.count-2):state.count);
+        const q=quantize(data,state.count,state.merge);
         const comps=findComponents(q.pixels,w,h,q.colors.length);
-        const minArea=Number($("minRegion").value||0);
+        const presetMM2 = {fine:0.25, balanced:1, easy:3}[$("cleanupPreset").value] || 1;
+        const override = $("minRegion").value;
+        const minMM2 = override === "auto" ? presetMM2 : Math.max(0, Number(override) || 0);
+        const mmPerPixel = (Math.max(2,Math.min(24,Number($("designWidth").value)||6)) * 25.4) / w;
+        const minArea = minMM2 / (mmPerPixel * mmPerPixel);
         const layers=[];
         for(let c=0;c<q.colors.length;c++){
           const paths=[];let keptArea=0, removed=0;
@@ -206,7 +267,7 @@
             if(ids.length<minArea){removed+=ids.length;continue;}
             const d=componentPath(ids,w,h);if(d){paths.push(d);keptArea+=ids.length;}
           }
-          if(paths.length)layers.push({color:hex(q.colors[c]),paths,area:keptArea,regions:paths.length,removed,operation:"cut"});
+          if(paths.length)layers.push({color:hex(q.colors[c]),paths,area:keptArea,regions:paths.length,removed,operation:"cut",averageRegionArea:keptArea/paths.length});
         }
         // Largest / darkest layers are named predictably, without guessing semantic object names.
         // Advanced outline preference marks very dark color groups as intended draw layers.
@@ -270,8 +331,12 @@
     if(m==="paper")msg.push("Paper/cardstock: test small details and use the correct material setting and blade.");
     if(m==="vinyl")msg.push("Adhesive vinyl: small islands and narrow pieces may be difficult to weed.");
     if(state.layers.length) {
-      const tiny=state.layers.reduce((n,l)=>n+l.regions,0);
-      if(tiny>80)msg.push("This design has many separate regions. Consider fewer colors or stronger cleanup.");
+      const totalRegions=state.layers.reduce((n,l)=>n+l.regions,0);
+      const flagged=state.layers.filter(l=>l.regions>100 || l.averageRegionArea<18).length;
+      if(totalRegions>80)msg.push(`This design has ${totalRegions} separate regions across ${state.layers.length} colors.`);
+      if(flagged)msg.push(`${flagged} layer${flagged===1?" has":"s have"} a high fragment count or small average pieces. Try Easy cut, merge similar colors, or crop unwanted details.`);
+      const removed=state.layers.reduce((n,l)=>n+(l.removed||0),0);
+      if(removed>0)msg.push("Cleanup removed tiny regions. Inspect important details before cutting.");
     }
     msg.push("Cricut Design Space may import all SVG groups as Basic Cut. Assign Draw/Pen operations manually there when needed.");
     $("exportWarnings").textContent=msg.join(" ");
@@ -291,10 +356,13 @@
     });
     const m=$("material").value;
     const materialName=m==="htv"?"Iron-on / heat-transfer vinyl (HTV)":m==="paper"?"Cardstock / paper":"Adhesive vinyl";
-    const guide=`CRICUT COLOR STUDIO — V1.0.2
+    const guide=`CRICUT COLOR STUDIO — V1.0.3
 Project: ${state.fileName}
 Finished width: ${state.width} inches
 Material selected: ${materialName}
+Cut detail preset: ${$("cleanupPreset").value}
+Similar colors merged: ${state.merge ? "Yes" : "No"}
+Crop percentages (top/right/bottom/left): ${state.crop.top}/${state.crop.right}/${state.crop.bottom}/${state.crop.left}
 Color layers: ${state.layers.length}
 
 FILES
