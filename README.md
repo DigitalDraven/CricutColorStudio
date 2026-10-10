@@ -1,6 +1,6 @@
 # Cricut Color Studio
 
-**Version:** 1.0.6  
+**Version:** 1.0.7.2  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
 **Hosting:** GitHub Pages (static site)  
 **Processing:** Browser-only; no image uploads, accounts, AI APIs, or application backend.
@@ -22,6 +22,7 @@
 - Finished-size-aware cleanup presets: Fine detail, Balanced, and Easy cut.
 - Advanced physical-area override for tiny-region filtering.
 - Optional merging of visually similar palette colors.
+- New optional Flatten Shading control (Subtle, Moderate, Strong) to combine tonal variants of a color while protecting near-black linework; off by default.
 - Crop controls for trimming borders or watermarks.
 - Warnings for layers with high region counts or small average pieces.
 - Combined SVG export and ZIP export containing per-color SVGs plus a quick-start guide.
@@ -65,7 +66,7 @@ Image processing occurs locally in the browser. The app does not send images to 
 
 ## Versioning
 
-- Application version: `1.0.6`
+- Application version: `1.0.7`
 - SVG export metadata and project guide identify the app version.
 - Future releases should update the app version in `index.html`, `js/app.js` comments, and this README.
 
@@ -92,3 +93,24 @@ V1.0.5.1 hotfix: versioned the stylesheet URL to prevent browsers from reusing c
 - Reports when tiny regions are removed and keeps the finished-size-aware minimum-piece-area controls.
 - SVG descriptions and the ZIP quick-start guide identify version 1.0.6.
 - Browser-only processing; no server or image upload is introduced.
+
+
+## V1.0.7 cross-browser consistency fix
+
+Safari and Chrome could export different palettes and path counts from the same image. Causes and fixes:
+
+- **Quantizer rewritten.** The old k-means seeded centers by luminance quantile, ran a fixed 7 iterations on a strided sample, and used mean colors, so small accent colors (e.g. orange) could be absorbed into blends such as muted green. The new quantizer is deterministic: 5-bit histogram, weight-aware farthest-point seeding, k-means to convergence, and each palette color snapped to the most common real color in its cluster. Merged groups keep the color of their heaviest member.
+- **Downscale done in JS.** The image is decoded at (up to) full size and reduced with an area-average filter instead of `drawImage` resampling, which differs between browsers. Canvas is requested in sRGB. Sources above 12 MP are pre-shrunk by the browser to respect iOS canvas limits.
+- Removed a duplicate `clearRect` and a no-op `.replace`.
+
+Remaining browser differences can come only from how each browser decodes the file and handles embedded ICC color profiles. For identical results, export source art as sRGB PNG.
+
+
+## V1.0.7.2 flatten-shading fixes
+
+- **Anchored grouping.** Flatten used transitive union-find, so a gradient of small steps collapsed into one color regardless of the Subtle/Moderate/Strong limit. Colors are now processed heaviest-first and may only join a group whose anchor (heaviest member) is within the limits.
+- **Oversample, then reduce.** With flatten on, the palette is built at max(selected count, 12) colors, tonal variants are combined, and the result is reduced back to the selected count by merging the cheapest pair (pixel-weighted). Previously flatten could only leave fewer layers than requested.
+- **Live update.** Changing the Flatten shading dropdown now re-runs processing immediately.
+- Shared `DARK_LUM` (48) constant for flatten protection and the black-outline mask.
+- Label remapping uses typed lookup tables instead of array spreading.
+- While flatten is on, the RGB "Merge similar colors" pass is skipped (flatten does its own anchored merging). That pass is transitive and, with the 12-color oversample, collapsed whole shade ramps before flatten could act.

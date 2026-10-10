@@ -1,11 +1,37 @@
-/* Cricut Color Studio v1.0.6 — browser-only image processing */
+/* Cricut Color Studio v1.0.7.2 — browser-only image processing */
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
   const state = { image: null, originalImage: null, fileName: "my-design", count: 4, layers: [], selected: -1, width: 6, merge: true, backgroundRemoved: true, backgroundPixelCount: 0, crop: {top:0,right:0,bottom:0,left:0}, cleanupStats: {watermarkPixels:0, tinyPixels:0} };
-  const canvas = $("workCanvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const canvas = $("workCanvas"), ctx = canvas.getContext("2d", { willReadFrequently: true, colorSpace: "srgb" });
   const fileInput = $("fileInput");
   const paletteButtons = [...document.querySelectorAll("[data-colors]")];
+
+  // Area-average (box) downscale with alpha-premultiplied accumulation. Pure JS, so the result
+  // does not depend on the browser's canvas resampling filter.
+  function boxDownscale(src, outW, outH) {
+    const sw = src.width, sh = src.height, sd = src.data;
+    if (sw === outW && sh === outH) return new ImageData(new Uint8ClampedArray(sd), sw, sh);
+    const out = new ImageData(outW, outH), od = out.data;
+    const xs = sw / outW, ys = sh / outH;
+    for (let oy = 0; oy < outH; oy++) {
+      const y0 = oy * ys, y1 = (oy + 1) * ys, iy0 = Math.floor(y0), iy1 = Math.min(sh, Math.ceil(y1));
+      for (let ox = 0; ox < outW; ox++) {
+        const x0 = ox * xs, x1 = (ox + 1) * xs, ix0 = Math.floor(x0), ix1 = Math.min(sw, Math.ceil(x1));
+        let r = 0, g = 0, b = 0, a = 0, wsum = 0;
+        for (let y = iy0; y < iy1; y++) {
+          const wy = Math.min(y + 1, y1) - Math.max(y, y0);
+          for (let x = ix0; x < ix1; x++) {
+            const wgt = wy * (Math.min(x + 1, x1) - Math.max(x, x0)), i = (y * sw + x) * 4, al = sd[i+3] / 255;
+            r += sd[i] * al * wgt; g += sd[i+1] * al * wgt; b += sd[i+2] * al * wgt; a += al * wgt; wsum += wgt;
+          }
+        }
+        const o = (oy * outW + ox) * 4;
+        if (a > 0 && wsum > 0) { od[o] = Math.round(r / a); od[o+1] = Math.round(g / a); od[o+2] = Math.round(b / a); od[o+3] = Math.round(255 * a / wsum); }
+      }
+    }
+    return out;
+  }
 
   function safeName(s) { return (s || "my-design").replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9-_]+/g, "-").replace(/^-+|-+$/g, "") || "my-design"; }
   function escapeXml(s) { return String(s).replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[c])); }
@@ -24,14 +50,24 @@
       const url = URL.createObjectURL(file), img = new Image();
       img.onload = () => {
         URL.revokeObjectURL(url);
-        const maxSide = 700, scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Preserve alpha from PNG/WebP sources; JPEGs naturally remain opaque.
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        state.originalImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const maxSide = 700;
+        const nw = img.naturalWidth, nh = img.naturalHeight;
+        const scale = Math.min(1, maxSide / Math.max(nw, nh));
+        const outW = Math.max(1, Math.round(nw * scale)), outH = Math.max(1, Math.round(nh * scale));
+        // Decode at (up to) full size, then downscale in JS with an area-average filter.
+        // Browser drawImage() resampling differs between Chrome and Safari; doing the
+        // downscale ourselves gives both browsers the same pixels. Very large sources are
+        // pre-shrunk by the browser first to stay under canvas memory limits (notably iOS Safari).
+        const MAX_DECODE_PIXELS = 12000000;
+        let decW = nw, decH = nh;
+        if (nw * nh > MAX_DECODE_PIXELS) { const f = Math.sqrt(MAX_DECODE_PIXELS / (nw * nh)); decW = Math.max(outW, Math.floor(nw * f)); decH = Math.max(outH, Math.floor(nh * f)); }
+        canvas.width = decW; canvas.height = decH;
+        ctx.clearRect(0, 0, decW, decH);
+        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, decW, decH);
+        const full = ctx.getImageData(0, 0, decW, decH);
+        state.originalImage = boxDownscale(full, outW, outH);
+        canvas.width = 1; canvas.height = 1; // release the large decode buffer
         renderCropSource();
         state.image = new ImageData(new Uint8ClampedArray(state.originalImage.data), state.originalImage.width, state.originalImage.height);
         state.fileName = safeName(file.name);
@@ -73,6 +109,7 @@
   $("removeBackground").addEventListener("change", () => { applyBackgroundSetting(); if (state.image) processImage(); });
   $("cleanupPreset").addEventListener("change", () => { if ($("minRegion").value === "auto" && state.image) processImage(); });
   $("addBlackOutlines").addEventListener("change", () => { if (state.image) processImage(); });
+  $("flattenShading").addEventListener("change", () => { if (state.image) processImage(); });
   $("applyCropBtn").addEventListener("click", () => {
     const nextCrop = {
       top: clampPercent($("cropTop").value),
@@ -210,48 +247,183 @@
     updateWarnings();
   }
   function colorDist(a,b) { return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2; }
+  // Deterministic, convergent palette builder.
+  //  * Histogram on 5 bits/channel (no random/stride sampling; absorbs +/-1-2 level decoder noise).
+  //  * Weight-aware farthest-point initialisation so small accent colors (e.g. an orange) get their own center.
+  //  * Weighted k-means run until assignments stop changing.
+  //  * Each center is snapped to the most common REAL color in its cluster, so anti-aliased edge blends
+  //    never become palette colors (previously produced "mud" such as #466E69).
   function quantize(data, requested, mergeSimilar = false) {
-    const n = data.length / 4, samples = [], opaque = [];
+    const n = data.length / 4, opaque = [];
     for (let i=0;i<n;i++) if (data[i*4+3] !== 0) opaque.push(i);
     if (!opaque.length) throw new Error("The image appears to be fully transparent. Turn off background removal or try another image.");
-    const stride = Math.max(1, Math.floor(opaque.length / 12000));
-    for (let j=0;j<opaque.length;j+=stride) {
-      const p=opaque[j]*4; samples.push([data[p],data[p+1],data[p+2]]);
+    const bins = new Map();
+    for (const i of opaque) {
+      const p=i*4, r=data[p], g=data[p+1], b=data[p+2], key=((r>>3)<<10)|((g>>3)<<5)|(b>>3);
+      let e = bins.get(key);
+      if (!e) bins.set(key, e = {n:0, r:0, g:0, b:0, exact:new Map()});
+      e.n++; e.r+=r; e.g+=g; e.b+=b;
+      const ek=(r<<16)|(g<<8)|b; e.exact.set(ek,(e.exact.get(ek)||0)+1);
     }
-    const uniqueCount = new Set(samples.map(c=>c.join(","))).size;
-    const k = Math.max(1, Math.min(requested, 12, uniqueCount));
-    const centers = [];
-    samples.sort((a,b)=>(a[0]*.299+a[1]*.587+a[2]*.114)-(b[0]*.299+b[1]*.587+b[2]*.114));
-    for(let j=0;j<k;j++) centers.push([...samples[Math.min(samples.length-1,Math.floor((j+.5)*samples.length/k))]]);
-    for(let iter=0;iter<7;iter++){
-      const sums=Array.from({length:k},()=>[0,0,0,0]);
-      for(const c of samples){let best=0,bd=Infinity;for(let j=0;j<k;j++){const d=colorDist(c,centers[j]);if(d<bd){bd=d;best=j;}}const s=sums[best];s[0]+=c[0];s[1]+=c[1];s[2]+=c[2];s[3]++;}
-      for(let j=0;j<k;j++)if(sums[j][3])centers[j]=sums[j].slice(0,3).map(v=>Math.round(v/sums[j][3]));
+    // Sort keys so results never depend on Map insertion order.
+    const pts = [...bins.entries()].sort((a,b)=>a[0]-b[0]).map(([key,e])=>{
+      let top=-1, topN=-1;
+      for (const [ek,c] of e.exact) if (c>topN || (c===topN && ek<top)) { topN=c; top=ek; }
+      return {c:[e.r/e.n, e.g/e.n, e.b/e.n], n:e.n, real:[(top>>16)&255,(top>>8)&255,top&255], realN:topN};
+    });
+    const k = Math.max(1, Math.min(requested, 12, pts.length));
+    const centers = [pts.reduce((a,b)=>b.n>a.n?b:a).c.slice()];
+    const minD = pts.map(p=>colorDist(p.c, centers[0]));
+    while (centers.length < k) {
+      let best=0, score=-1;
+      for (let i=0;i<pts.length;i++) { const sc=minD[i]*Math.sqrt(pts[i].n); if (sc>score) { score=sc; best=i; } }
+      if (score <= 0) break;
+      const nc = pts[best].c.slice(); centers.push(nc);
+      for (let i=0;i<pts.length;i++) minD[i]=Math.min(minD[i], colorDist(pts[i].c, nc));
     }
-    // Optionally combine nearby palette colors into shared groups.
-    let palette = centers.map(c => [...c]);
-    let centerMap = centers.map((_,i) => i);
-    if (mergeSimilar && palette.length > 1) {
-      const parent = palette.map((_,i) => i);
-      const root = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
-      const join = (a,b) => { a=root(a); b=root(b); if(a!==b) parent[b]=a; };
-      const threshold = 48 * 48;
-      for (let a=0; a<palette.length; a++) for (let b=a+1; b<palette.length; b++) {
-        if (colorDist(palette[a],palette[b]) <= threshold) join(a,b);
+    const kk = centers.length, assign = new Int16Array(pts.length).fill(-1);
+    for (let iter=0; iter<60; iter++) {
+      let changed=false; const sums=Array.from({length:kk},()=>[0,0,0,0]);
+      for (let i=0;i<pts.length;i++) {
+        let bj=0, bd=Infinity;
+        for (let j=0;j<kk;j++) { const d=colorDist(pts[i].c, centers[j]); if (d<bd) { bd=d; bj=j; } }
+        if (assign[i]!==bj) { assign[i]=bj; changed=true; }
+        const s=sums[bj], w=pts[i].n; s[0]+=pts[i].c[0]*w; s[1]+=pts[i].c[1]*w; s[2]+=pts[i].c[2]*w; s[3]+=w;
       }
-      const groups = new Map();
-      palette.forEach((c,i) => { const r=root(i); if(!groups.has(r)) groups.set(r,[]); groups.get(r).push(c); });
-      const roots=[...groups.keys()];
-      const merged=roots.map(r=>{const group=groups.get(r);return [0,1,2].map(ch=>Math.round(group.reduce((sum,c)=>sum+c[ch],0)/group.length));});
-      centerMap=palette.map((_,i)=>roots.indexOf(root(i)));
-      palette=merged;
+      for (let j=0;j<kk;j++) if (sums[j][3]) for (let ch=0;ch<3;ch++) centers[j][ch]=sums[j][ch]/sums[j][3];
+      if (!changed) break;
     }
-    const pixels=new Uint8Array(n); pixels.fill(255); // 255 is reserved for transparent pixels
-    for(const i of opaque){const p=i*4,c=[data[p],data[p+1],data[p+2]];let best=0,bd=Infinity;for(let j=0;j<centers.length;j++){const d=colorDist(c,centers[j]);if(d<bd){bd=d;best=j;}}pixels[i]=centerMap[best];}
+    // Snap to real colors; track pixel weight per center.
+    let palette = [], weight = [];
+    for (let j=0;j<kk;j++) {
+      let top=null, total=0;
+      for (let i=0;i<pts.length;i++) if (assign[i]===j) { total+=pts[i].n; if (!top || pts[i].realN>top.realN) top=pts[i]; }
+      if (!total) continue;
+      palette.push(top.real.slice()); weight.push(total);
+    }
+    const snapped = palette.map(c=>c.slice());
+    let centerMap = palette.map((_,i)=>i);
+    if (mergeSimilar && palette.length > 1) {
+      const parent = palette.map((_,i)=>i);
+      const root = x => { while (parent[x]!==x) { parent[x]=parent[parent[x]]; x=parent[x]; } return x; };
+      const join = (a,b) => { a=root(a); b=root(b); if (a!==b) parent[b]=a; };
+      const threshold = 48*48;
+      for (let a=0;a<palette.length;a++) for (let b=a+1;b<palette.length;b++) if (colorDist(palette[a],palette[b])<=threshold) join(a,b);
+      const roots=[...new Set(palette.map((_,i)=>root(i)))].sort((a,b)=>a-b);
+      // A merged group keeps the color of its heaviest member (a real color, not a blend).
+      const mergedPalette = roots.map(r=>{ let best=-1; palette.forEach((c,i)=>{ if (root(i)===r && (best<0 || weight[i]>weight[best])) best=i; }); return palette[best].slice(); });
+      centerMap = palette.map((_,i)=>roots.indexOf(root(i)));
+      palette = mergedPalette;
+    }
+    return finishQuantize(data, n, opaque, snapped, centerMap, palette);
+  }
+  function finishQuantize(data, n, opaque, snapped, centerMap, palette) {
+    const cache = new Map(), pixels = new Uint8Array(n); pixels.fill(255); // 255 = transparent
+    for (const i of opaque) {
+      const p=i*4, ek=(data[p]<<16)|(data[p+1]<<8)|data[p+2];
+      let m = cache.get(ek);
+      if (m === undefined) {
+        const c=[data[p],data[p+1],data[p+2]]; let best=0, bd=Infinity;
+        for (let j=0;j<snapped.length;j++) { const d=colorDist(c,snapped[j]); if (d<bd) { bd=d; best=j; } }
+        m = centerMap[best]; cache.set(ek, m);
+      }
+      pixels[i]=m;
+    }
     const used=[...new Set(opaque.map(i=>pixels[i]))].sort((a,b)=>a-b), remap=new Map(used.map((v,i)=>[v,i]));
-    for(const i of opaque)pixels[i]=remap.get(pixels[i]);
+    for (const i of opaque) pixels[i]=remap.get(pixels[i]);
     return {pixels, colors:used.map(i=>palette[i])};
   }
+  // Shared "this is linework, not shading" luminance cutoff. Used by tonal flattening (never merge
+  // these colors) and by the optional black-outline mask, so the two cannot drift apart.
+  const DARK_LUM = 48;
+  const lumOf = c => 0.299*c[0] + 0.587*c[1] + 0.114*c[2];
+
+  // Apply an old-label -> new-label mapping and compact the labels to 0..n-1.
+  // Single pass with typed lookup tables (no array spreading); 255 stays "transparent".
+  function remapLabels(q, oldToNew, newPalette) {
+    const pixels = new Uint8Array(q.pixels.length).fill(255), seen = new Uint8Array(256);
+    for (let i=0;i<pixels.length;i++) { const v=q.pixels[i]; if (v!==255) { const m=oldToNew[v]; pixels[i]=m; seen[m]=1; } }
+    const remap = new Int16Array(256).fill(-1), colors = [];
+    for (let m=0;m<newPalette.length;m++) if (seen[m]) { remap[m]=colors.length; colors.push(newPalette[m].slice()); }
+    for (let i=0;i<pixels.length;i++) if (pixels[i]!==255) pixels[i]=remap[pixels[i]];
+    return {pixels, colors};
+  }
+  function labelCounts(q) {
+    const counts = new Uint32Array(q.colors.length);
+    for (let i=0;i<q.pixels.length;i++) { const v=q.pixels[i]; if (v!==255 && v<counts.length) counts[v]++; }
+    return counts;
+  }
+
+  // Optional tonal flattening: merge shades that look like highlights/shadows of the same color
+  // family. Near-black colors are protected as linework.
+  // Grouping is ANCHORED, not transitive: colors are processed heaviest-first and may only join a
+  // group if they are close to that group's anchor (its heaviest member). This keeps the luminance
+  // and hue limits meaningful; a chain of small steps can no longer collapse a whole gradient.
+  function flattenTonalShades(q, level) {
+    if (!level || level === "off" || q.colors.length < 2) return q;
+    const limits = {subtle: 42, moderate: 78, strong: 118};
+    const maxLumDelta = limits[level] || limits.moderate;
+    const colors = q.colors;
+    const info = colors.map(c => {
+      const r=c[0]/255, g=c[1]/255, b=c[2]/255;
+      const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+      let hue=0;
+      if (d) hue=max===r ? 60*(((g-b)/d)%6) : max===g ? 60*((b-r)/d+2) : 60*((r-g)/d+4);
+      if (hue<0) hue+=360;
+      const lum=lumOf(c), sat=max===0?0:d/max;
+      return {hue, lum, sat, veryDark: lum<DARK_LUM};
+    });
+    const hueGap=(a,b)=>{const d=Math.abs(a-b);return Math.min(d,360-d);};
+    const compatible=(A,B)=>{
+      if (A.veryDark || B.veryDark) return false;
+      if (Math.abs(A.lum-B.lum)>maxLumDelta) return false;
+      const nA=A.sat<0.16, nB=B.sat<0.16;
+      if (nA && nB) return true;
+      if (nA!==nB) return false;
+      return hueGap(A.hue,B.hue)<=22 && Math.abs(A.sat-B.sat)<=0.42;
+    };
+    const counts = labelCounts(q);
+    const order = colors.map((_,i)=>i).sort((a,b)=>counts[b]-counts[a] || a-b);
+    const groups = []; // each: {anchor}
+    const oldToNew = new Array(colors.length);
+    for (const i of order) {
+      let bestG=-1, bestDelta=Infinity;
+      for (let g=0; g<groups.length; g++) {
+        const anchor=groups[g].anchor;
+        if (!compatible(info[anchor], info[i])) continue;
+        const delta=Math.abs(info[anchor].lum-info[i].lum);
+        if (delta<bestDelta) { bestDelta=delta; bestG=g; }
+      }
+      if (bestG<0) { groups.push({anchor:i}); bestG=groups.length-1; }
+      oldToNew[i]=bestG;
+    }
+    if (groups.length===colors.length) return q;
+    return remapLabels(q, oldToNew, groups.map(g=>colors[g.anchor]));
+  }
+
+  // Reduce a palette to `target` colors by repeatedly merging the cheapest pair (Ward-style cost:
+  // squared RGB distance weighted by pixel counts, so small accents are not swallowed lightly).
+  // The heavier color survives, so the result is always a real color.
+  function reduceToCount(q, target) {
+    if (q.colors.length <= target) return q;
+    const counts = Array.from(labelCounts(q));
+    let cols = q.colors.map(c=>c.slice()), map = cols.map((_,i)=>i), alive = cols.map((_,i)=>i);
+    while (alive.length > target) {
+      let bi=-1, bj=-1, bc=Infinity;
+      for (let x=0;x<alive.length;x++) for (let y=x+1;y<alive.length;y++) {
+        const a=alive[x], b=alive[y];
+        const cost=colorDist(cols[a],cols[b])*(counts[a]*counts[b])/Math.max(1,counts[a]+counts[b]);
+        if (cost<bc) { bc=cost; bi=a; bj=b; }
+      }
+      const keep = counts[bi]>=counts[bj] ? bi : bj, drop = keep===bi ? bj : bi;
+      counts[keep]+=counts[drop];
+      for (let k=0;k<map.length;k++) if (map[k]===drop) map[k]=keep;
+      alive=alive.filter(v=>v!==drop);
+    }
+    const newIndex = new Map(alive.map((v,i)=>[v,i]));
+    return remapLabels(q, map.map(v=>newIndex.get(v)), alive.map(v=>cols[v]));
+  }
+
   function smoothColorLabels(pixels, w, h, iterations = 1) {
     let current = new Uint8Array(pixels);
     for (let pass=0; pass<iterations; pass++) {
@@ -394,7 +566,14 @@
     setTimeout(()=>{
       try {
         const {width:w,height:h,data}=state.image;
-        const q=quantize(data,state.count,state.merge);
+        // When flattening, oversample the palette first so tonal variants exist to be combined,
+        // then reduce back to the requested color count (flatten alone would otherwise just
+        // leave fewer layers than the 4/8/12 preset asked for). The RGB "merge similar colors" pass is
+        // skipped while flattening: it is transitive and would collapse a whole shade ramp before
+        // the tonal flatten (which has its own anchored grouping) could see it.
+        const flatten=$("flattenShading").value;
+        let q=quantize(data, flatten==="off" ? state.count : Math.max(state.count,12), flatten==="off" ? state.merge : false);
+        if(flatten!=="off"){ q=flattenTonalShades(q, flatten); q=reduceToCount(q, state.count); }
         q.pixels=smoothColorLabels(q.pixels,w,h,1);
         // Remove only a strongly watermark-like cluster at the lower-right edge.
         // This is deliberately conservative; cropping remains available for other layouts.
@@ -408,7 +587,7 @@
             const r=data[i*4], g=data[i*4+1], b=data[i*4+2];
             const lum=0.299*r+0.587*g+0.114*b;
             const spread=Math.max(r,g,b)-Math.min(r,g,b);
-            if (lum < 48 && spread < 90) {
+            if (lum < DARK_LUM && spread < 90) {
               outlineMask[i]=0;
               q.pixels[i]=255;
             }
@@ -465,7 +644,7 @@
       const op=l.operation||"cut";
       return `<g id="${escapeXml(l.id)}" data-name="${escapeXml(l.name)}" data-color="${l.color}" data-operation="${op}" fill="${l.color}" fill-rule="evenodd" stroke="none">${l.paths.map(d=>`<path d="${d}"/>`).join("")}</g>`;
     }).join("\n");
-    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${widthIn}in" height="${heightIn.toFixed(3)}in" viewBox="0 0 ${w} ${h}">\n<title>${escapeXml(state.fileName)} - Cricut Color Studio</title>\n<desc>Color-separated vector artwork generated by Cricut Color Studio 1.0.6. Imported SVG elements may need their operations assigned in Cricut Design Space.</desc>\n${groups}\n</svg>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${widthIn}in" height="${heightIn.toFixed(3)}in" viewBox="0 0 ${w} ${h}">\n<title>${escapeXml(state.fileName)} - Cricut Color Studio</title>\n<desc>Color-separated vector artwork generated by Cricut Color Studio 1.0.7.2. Imported SVG elements may need their operations assigned in Cricut Design Space.</desc>\n${groups}\n</svg>`;
   }
   function renderComposite(){
     const host=$("compositePreview");
@@ -534,18 +713,19 @@
     const zip=new JSZip(),folder=zip.folder(state.fileName+"-cricut-color-studio");
     folder.file(state.fileName+"-combined.svg",svgFor(activeLayers));
     activeLayers.forEach((l,i)=>{
-      const layerSvg=svgFor([l]).replace(`id="${escapeXml(l.id)}"`,`id="${escapeXml(l.id)}"`);
+      const layerSvg=svgFor([l]);
       folder.file(String(i+1).padStart(2,"0")+"-"+l.color.slice(1)+".svg",layerSvg);
     });
     const m=$("material").value;
     const materialName=m==="htv"?"Iron-on / heat-transfer vinyl (HTV)":m==="paper"?"Cardstock / paper":"Adhesive vinyl";
-    const guide=`CRICUT COLOR STUDIO — V1.0.6
+    const guide=`CRICUT COLOR STUDIO — V1.0.7.2
 Project: ${state.fileName}
 Finished width: ${state.width} inches
 Material selected: ${materialName}
 Cut detail preset: ${$("cleanupPreset").value}
 Flat Color mode: Yes
 Similar colors merged: ${state.merge ? "Yes" : "No"}
+Flatten shading: ${$("flattenShading").value}
 Separate black linework: ${$("addBlackOutlines").checked ? "Yes (experimental)" : "No"}
 Crop percentages (top/right/bottom/left): ${state.crop.top}/${state.crop.right}/${state.crop.bottom}/${state.crop.left}
 Color layers exported: ${activeLayers.length} of ${state.layers.length}

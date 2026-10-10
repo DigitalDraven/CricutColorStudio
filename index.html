@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f1ff">
-  <title>Cricut Color Studio v1.0.6</title>
-  <link rel="stylesheet" href="css/styles.css?v=1.0.6">
+  <title>Cricut Color Studio v1.0.7.2</title>
+  <link rel="stylesheet" href="css/styles.css?v=1.0.7.2">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="./" aria-label="Cricut Color Studio home"><span class="brand-mark">✂</span><span>Cricut <strong>Color Studio</strong></span></a>
-    <span class="version">V1.0.6 · Runs in your browser</span>
+    <span class="version">V1.0.7.2 · Runs in your browser</span>
   </header>
   <main class="shell">
     <section class="hero">
@@ -133,6 +133,16 @@
                 <p class="field-help">Threshold scales with the finished size, so tiny pieces are judged by real-world area.</p>
               </div>
               <div>
+                <label for="flattenShading">Flatten shading</label>
+                <select id="flattenShading">
+                  <option value="off" selected>Off (original colors)</option>
+                  <option value="subtle">Subtle — merge close tonal shades</option>
+                  <option value="moderate">Moderate — merge highlights and shadows</option>
+                  <option value="strong">Strong — broad color regions</option>
+                </select>
+                <p class="field-help">Combines related light/dark shades while protecting very dark linework, then reduces to your chosen color count. While on, this replaces &ldquo;Merge similar colors&rdquo;. Review the preview before cutting.</p>
+              </div>
+              <div>
                 <label class="checkbox-label" for="addBlackOutlines"><input id="addBlackOutlines" type="checkbox"> Keep dark linework as a separate black layer</label>
                 <p class="field-help">Experimental: separates very dark pixels into a black cut layer. Review the result before cutting.</p>
               </div>
@@ -160,10 +170,10 @@
       </div>
     </section>
     <section class="privacy-note"><span>🔒</span><p><strong>Your picture stays on your device.</strong> Image processing happens in this browser. Nothing is uploaded to a server.</p></section>
-    <footer>Made for curious makers · Cricut Color Studio v1.0.6 <span>Not affiliated with Cricut.</span></footer>
+    <footer>Made for curious makers · Cricut Color Studio v1.0.7.2 <span>Not affiliated with Cricut.</span></footer>
   </main>
   <canvas id="workCanvas" hidden></canvas>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
-  <script src="js/app.js?v=1.0.6" defer></script>
+  <script src="js/app.js?v=1.0.7.2" defer></script>
 </body>
 </html>
