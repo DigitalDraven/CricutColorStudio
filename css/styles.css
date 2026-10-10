@@ -14,3 +14,8 @@
 .crop-grid input{width:100%;min-width:0;border:1px solid #ded9ec;border-radius:10px;padding:10px;font:500 13px "DM Sans",sans-serif}
 .layer-warning{font-size:12px;color:#9a681b;margin-left:4px}
 @media(max-width:480px){.crop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V1.0.4 flat-color workflow */
+.flat-mode-note{margin-top:8px;max-width:320px}
+.checkbox-label{display:flex!important;align-items:center;gap:9px;font-size:13px!important;margin-bottom:0!important}
+.checkbox-label input{accent-color:var(--purple);width:17px;height:17px}

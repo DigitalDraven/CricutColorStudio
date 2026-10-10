@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f1ff">
-  <title>Cricut Color Studio v1.0.3</title>
+  <title>Cricut Color Studio v1.0.4</title>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="./" aria-label="Cricut Color Studio home"><span class="brand-mark">✂</span><span>Cricut <strong>Color Studio</strong></span></a>
-    <span class="version">V1.0.3 · Runs in your browser</span>
+    <span class="version">V1.0.4 · Runs in your browser</span>
   </header>
   <main class="shell">
     <section class="hero">
@@ -37,10 +37,11 @@
         <div class="control-group">
           <label for="colorCount">Color detail</label>
           <div class="segmented" role="group" aria-label="Number of colors">
-            <button type="button" data-colors="4">Simple <small>4 colors</small></button>
-            <button type="button" data-colors="8" class="selected">Balanced <small>8 colors</small></button>
+            <button type="button" data-colors="4" class="selected">Simple <small>4 colors</small></button>
+            <button type="button" data-colors="8">Balanced <small>8 colors</small></button>
             <button type="button" data-colors="12">Detailed <small>12 colors</small></button>
           </div>
+          <p class="field-help flat-mode-note">Flat Color mode is on: similar shades are grouped and small pixel variations are smoothed.</p>
         </div>
         <div class="control-group">
           <label for="material">What are you making?</label>
@@ -121,12 +122,8 @@
                 <p class="field-help">Threshold scales with the finished size, so tiny pieces are judged by real-world area.</p>
               </div>
               <div>
-                <label for="outlineMode">Dark outline handling</label>
-                <select id="outlineMode">
-                  <option value="cut" selected>Keep as a cut layer</option>
-                  <option value="draw">Prepare as a draw layer (experimental)</option>
-                </select>
-                <p class="field-help">Draw mode uses traced outline-region boundaries, not true centerlines. Inspect it carefully in Design Space.</p>
+                <label class="checkbox-label" for="addBlackOutlines"><input id="addBlackOutlines" type="checkbox"> Keep dark linework as a separate black layer</label>
+                <p class="field-help">Experimental: separates very dark pixels into a black cut layer. Review the result before cutting.</p>
               </div>
             </div>
             <div class="advanced-actions">
@@ -152,10 +149,10 @@
       </div>
     </section>
     <section class="privacy-note"><span>🔒</span><p><strong>Your picture stays on your device.</strong> Image processing happens in this browser. Nothing is uploaded to a server.</p></section>
-    <footer>Made for curious makers · Cricut Color Studio v1.0.3 <span>Not affiliated with Cricut.</span></footer>
+    <footer>Made for curious makers · Cricut Color Studio v1.0.4 <span>Not affiliated with Cricut.</span></footer>
   </main>
   <canvas id="workCanvas" hidden></canvas>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
-  <script src="js/app.js?v=1.0.3" defer></script>
+  <script src="js/app.js?v=1.0.4" defer></script>
 </body>
 </html>

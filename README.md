@@ -1,7 +1,6 @@
 # Cricut Color Studio
-https://digitaldraven.github.io/CricutColorStudio/
 
-**Version:** 1.0.3  
+**Version:** 1.0.4  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
 **Hosting:** GitHub Pages (static site)  
 **Processing:** Browser-only; no image uploads, accounts, AI APIs, or application backend.
@@ -14,6 +13,9 @@ https://digitaldraven.github.io/CricutColorStudio/
 - 4-, 8-, and 12-color simplification presets.
 - Connected color-region detection and vector path generation.
 - Individual layer preview and combined design preview.
+- Four-color Simple mode is selected by default.
+- Flat Color workflow groups similar shades and smooths isolated pixel-label noise.
+- Optional experimental separate black linework layer.
 - Finished-size-aware cleanup presets: Fine detail, Balanced, and Easy cut.
 - Advanced physical-area override for tiny-region filtering.
 - Optional merging of visually similar palette colors.
@@ -42,9 +44,9 @@ The app scales the image to a maximum dimension of 700 pixels, optionally makes 
 
 This is an initial, deterministic V1 converter—not a professional illustration reconstruction tool. Shaded or photographic images may create many irregular patches. For best results, start with clear illustrations, cartoons, logos, and flat-color artwork.
 
-## V1.0.3 cleanup and crop
+## V1.0.4 cleanup and crop
 
-The Fine detail, Balanced, and Easy cut presets use approximate minimum piece areas of 0.25, 1, and 3 mm² respectively, converted to pixel area using the chosen finished width. This is a heuristic, not a guarantee of minimum cuttable width; thin shapes may still be fragile. Advanced options can override the preset. Similar-color merging combines palette centers within an RGB Euclidean distance of 48. Crop values trim percentages from each image edge and can be reset.
+The default workflow targets four colors and enables similar-color merging. A one-pass label smoother only replaces isolated color speckles when a neighboring label strongly dominates; it does not blur or smooth vector paths directly. The optional black linework layer extracts very dark, low-saturation source pixels into a separate black cut layer, so inspect it carefully. The Fine detail, Balanced, and Easy cut presets use approximate minimum piece areas of 0.25, 1, and 3 mm² respectively, converted to pixel area using the chosen finished width. This is a heuristic, not a guarantee of minimum cuttable width; thin shapes may still be fragile. Advanced options can override the preset. Similar-color merging combines palette centers within an RGB Euclidean distance of 48. Crop values trim percentages from each image edge and can be reset.
 
 ## Important Cricut notes
 
@@ -60,7 +62,7 @@ Image processing occurs locally in the browser. The app does not send images to 
 
 ## Versioning
 
-- Application version: `1.0.3`
+- Application version: `1.0.4`
 - SVG export metadata and project guide identify the app version.
 - Future releases should update the app version in `index.html`, `js/app.js` comments, and this README.
 

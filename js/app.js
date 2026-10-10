@@ -1,8 +1,8 @@
-/* Cricut Color Studio v1.0.3 — browser-only image processing */
+/* Cricut Color Studio v1.0.4 — browser-only image processing */
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { image: null, originalImage: null, fileName: "my-design", count: 8, layers: [], selected: -1, width: 6, merge: false, backgroundRemoved: true, backgroundPixelCount: 0, crop: {top:0,right:0,bottom:0,left:0} };
+  const state = { image: null, originalImage: null, fileName: "my-design", count: 4, layers: [], selected: -1, width: 6, merge: true, backgroundRemoved: true, backgroundPixelCount: 0, crop: {top:0,right:0,bottom:0,left:0} };
   const canvas = $("workCanvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
   const fileInput = $("fileInput");
   const paletteButtons = [...document.querySelectorAll("[data-colors]")];
@@ -60,6 +60,7 @@
     state.count = Number(btn.dataset.colors);
     if (state.image) processImage();
   }));
+  $("mergeBtn").textContent = state.merge ? "Stop merging colors" : "Merge similar colors";
   $("processBtn").addEventListener("click", processImage);
   $("rebuildBtn").addEventListener("click", processImage);
   $("mergeBtn").addEventListener("click", () => {
@@ -70,6 +71,7 @@
   $("material").addEventListener("change", updateMaterialHelp);
   $("removeBackground").addEventListener("change", () => { applyBackgroundSetting(); if (state.image) processImage(); });
   $("cleanupPreset").addEventListener("change", () => { if ($("minRegion").value === "auto" && state.image) processImage(); });
+  $("addBlackOutlines").addEventListener("change", () => { if (state.image) processImage(); });
   $("applyCropBtn").addEventListener("click", () => {
     const nextCrop = {
       top: clampPercent($("cropTop").value),
@@ -196,6 +198,28 @@
     for(const i of opaque)pixels[i]=remap.get(pixels[i]);
     return {pixels, colors:used.map(i=>palette[i])};
   }
+  function smoothColorLabels(pixels, w, h, iterations = 1) {
+    let current = new Uint8Array(pixels);
+    for (let pass=0; pass<iterations; pass++) {
+      const next = new Uint8Array(current);
+      for (let y=1; y<h-1; y++) for (let x=1; x<w-1; x++) {
+        const i=y*w+x, center=current[i];
+        if (center===255) continue;
+        const counts=new Map();
+        for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) {
+          const v=current[(y+dy)*w+x+dx];
+          if(v!==255) counts.set(v,(counts.get(v)||0)+1);
+        }
+        let best=center,bestCount=counts.get(center)||0;
+        for(const [v,c] of counts) if(c>bestCount){best=v;bestCount=c;}
+        // Only change isolated speckles; keep balanced boundaries intact.
+        if(best!==center && bestCount>=5 && (counts.get(center)||0)<=3) next[i]=best;
+      }
+      current=next;
+    }
+    return current;
+  }
+
   function findComponents(pixels, w, h, colorCount) {
     const seen = new Uint8Array(pixels.length), comps = Array.from({length:colorCount},()=>[]);
     const queue = new Int32Array(pixels.length);
@@ -254,6 +278,21 @@
       try {
         const {width:w,height:h,data}=state.image;
         const q=quantize(data,state.count,state.merge);
+        q.pixels=smoothColorLabels(q.pixels,w,h,1);
+        let outlineMask = null;
+        if ($("addBlackOutlines").checked) {
+          outlineMask = new Uint8Array(w*h); outlineMask.fill(255);
+          for (let i=0; i<w*h; i++) {
+            if (data[i*4+3] === 0) continue;
+            const r=data[i*4], g=data[i*4+1], b=data[i*4+2];
+            const lum=0.299*r+0.587*g+0.114*b;
+            const spread=Math.max(r,g,b)-Math.min(r,g,b);
+            if (lum < 48 && spread < 90) {
+              outlineMask[i]=0;
+              q.pixels[i]=255;
+            }
+          }
+        }
         const comps=findComponents(q.pixels,w,h,q.colors.length);
         const presetMM2 = {fine:0.25, balanced:1, easy:3}[$("cleanupPreset").value] || 1;
         const override = $("minRegion").value;
@@ -270,15 +309,18 @@
           if(paths.length)layers.push({color:hex(q.colors[c]),paths,area:keptArea,regions:paths.length,removed,operation:"cut",averageRegionArea:keptArea/paths.length});
         }
         // Largest / darkest layers are named predictably, without guessing semantic object names.
-        // Advanced outline preference marks very dark color groups as intended draw layers.
+        // Optional outline layer separates very dark source pixels into a dedicated black cut layer.
         // This is project metadata only: Design Space may ignore SVG operation metadata,
-        // and these are traced region boundaries rather than true pen centerlines.
-        if ($("outlineMode").value === "draw") {
-          layers.forEach(l => {
-            const rgb = [parseInt(l.color.slice(1,3),16), parseInt(l.color.slice(3,5),16), parseInt(l.color.slice(5,7),16)];
-            const luminance = rgb[0]*0.299 + rgb[1]*0.587 + rgb[2]*0.114;
-            if (luminance < 85) l.operation = "draw";
-          });
+        // ; the outline layer is not a pen centerline.
+        if (outlineMask) {
+          const outlineComponents=findComponents(outlineMask,w,h,1);
+          const outlinePaths=[]; let outlineArea=0;
+          for (const ids of outlineComponents[0]) {
+            if (ids.length < Math.max(2, minArea*0.5)) continue;
+            const d=componentPath(ids,w,h);
+            if (d) { outlinePaths.push(d); outlineArea+=ids.length; }
+          }
+          if (outlinePaths.length) layers.push({color:"#08090d",paths:outlinePaths,area:outlineArea,regions:outlinePaths.length,removed:0,operation:"cut",averageRegionArea:outlineArea/outlinePaths.length,isOutline:true});
         }
         layers.sort((a,b)=>b.area-a.area);
         layers.forEach((l,i)=>{l.name="Color "+(i+1)+(l.operation==="draw"?" · draw intended":"");l.id="layer-"+(i+1);});
@@ -356,12 +398,14 @@
     });
     const m=$("material").value;
     const materialName=m==="htv"?"Iron-on / heat-transfer vinyl (HTV)":m==="paper"?"Cardstock / paper":"Adhesive vinyl";
-    const guide=`CRICUT COLOR STUDIO — V1.0.3
+    const guide=`CRICUT COLOR STUDIO — V1.0.4
 Project: ${state.fileName}
 Finished width: ${state.width} inches
 Material selected: ${materialName}
 Cut detail preset: ${$("cleanupPreset").value}
+Flat Color mode: Yes
 Similar colors merged: ${state.merge ? "Yes" : "No"}
+Separate black linework: ${$("addBlackOutlines").checked ? "Yes (experimental)" : "No"}
 Crop percentages (top/right/bottom/left): ${state.crop.top}/${state.crop.right}/${state.crop.bottom}/${state.crop.left}
 Color layers: ${state.layers.length}
 
