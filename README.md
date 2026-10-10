@@ -1,4 +1,5 @@
 # Cricut Color Studio
+https://digitaldraven.github.io/CricutColorStudio/
 
 **Version:** 1.0.3  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
