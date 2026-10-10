@@ -1,6 +1,6 @@
 # Cricut Color Studio
 
-**Version:** 1.0.1  
+**Version:** 1.0.2  
 **Purpose:** Turn an uploaded image into color-separated SVG layers for Cricut Design Space.  
 **Hosting:** GitHub Pages (static site)  
 **Processing:** Browser-only; no image uploads, accounts, AI APIs, or application backend.
@@ -52,7 +52,7 @@ Image processing occurs locally in the browser. The app does not send images to 
 
 ## Versioning
 
-- Application version: `1.0.1`
+- Application version: `1.0.2`
 - SVG export metadata and project guide identify the app version.
 - Future releases should update the app version in `index.html`, `js/app.js` comments, and this README.
 

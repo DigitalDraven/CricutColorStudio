@@ -1,8 +1,8 @@
-/* Cricut Color Studio v1.0.1 — browser-only image processing */
+/* Cricut Color Studio v1.0.2 — browser-only image processing */
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { image: null, originalImage: null, fileName: "my-design", count: 8, layers: [], selected: -1, width: 6, merge: false, backgroundRemoved: true };
+  const state = { image: null, originalImage: null, fileName: "my-design", count: 8, layers: [], selected: -1, width: 6, merge: false, backgroundRemoved: true, backgroundPixelCount: 0 };
   const canvas = $("workCanvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
   const fileInput = $("fileInput");
   const paletteButtons = [...document.querySelectorAll("[data-colors]")];
@@ -28,7 +28,8 @@
         canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
         canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Preserve alpha from PNG/WebP sources; JPEGs naturally remain opaque.
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         state.originalImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         state.image = new ImageData(new Uint8ClampedArray(state.originalImage.data), state.originalImage.width, state.originalImage.height);
@@ -74,6 +75,7 @@
     const src = state.originalImage;
     const out = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
     state.backgroundRemoved = $("removeBackground").checked;
+    state.backgroundPixelCount = 0;
     if (state.backgroundRemoved) {
       const w = src.width, h = src.height, data = out.data, n = w * h;
       const seen = new Uint8Array(n), queue = new Int32Array(n);
@@ -93,9 +95,15 @@
         if (y > 0) add(p-w);
         if (y < h-1) add(p+w);
       }
-      for (let p=0; p<n; p++) if (seen[p]) data[p*4+3] = 0;
+      for (let p=0; p<n; p++) if (seen[p]) { data[p*4+3] = 0; state.backgroundPixelCount++; }
     }
     state.image = out;
+    const status = $("backgroundStatus");
+    if (status) {
+      status.textContent = state.backgroundRemoved
+        ? `Background removed: ${state.backgroundPixelCount.toLocaleString()} edge-connected pixels.`
+        : "Background removal is off; the original background will be kept.";
+    }
   }
 
   function updateMaterialHelp() {
@@ -283,7 +291,7 @@
     });
     const m=$("material").value;
     const materialName=m==="htv"?"Iron-on / heat-transfer vinyl (HTV)":m==="paper"?"Cardstock / paper":"Adhesive vinyl";
-    const guide=`CRICUT COLOR STUDIO — V1.0.1
+    const guide=`CRICUT COLOR STUDIO — V1.0.2
 Project: ${state.fileName}
 Finished width: ${state.width} inches
 Material selected: ${materialName}
